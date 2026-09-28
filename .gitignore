@@ -1,0 +1,16 @@
+# Game disk images and ROMs (copyrighted data, large)
+*.dsk
+*.DSK
+*.rom
+*.ROM
+
+# Build outputs
+hdtool/hookpatch.bin
+*.lst
+
+# Third-party binaries (Nextor tools)
+*.COM
+*.com
+
+# Emulator logs / scratch
+*.log
