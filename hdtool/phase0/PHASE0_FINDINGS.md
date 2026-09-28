@@ -47,22 +47,28 @@
 **미확인:** 파일14(시나리오)가 섹터 번호를 직접 담고 있는지. 이번 조사에서 손대지 못했다. 다음 조사에서
 파일14를 문자열/워드 단위로 훑어 섹터 테이블 파일과 겹치는 시작 섹터 값이 있는지 확인해야 한다.
 
-## 4. DOS2 실행 환경 측정 — 막힘, 대체 경로로 우회
+## 4. DOS2 실행 환경 — ASCII DOS2 부팅 성공 (openMSX)
 
-**시도:** openMSX `kittya` + `ide` 확장(Sunrise ide250.dat BIOS, 비-Nextor)으로 ASCII 내장 DOS2를 직접 띄워
-TPA 상한과 빈 매퍼 세그먼트 수를 측정하려 했다.
+`kittya` + `ide` 확장(Sunrise IDE BIOS 2.50)에서 ASCII MSX-DOS2가 `A:\>`까지 부팅된다. 처음에 막힌 원인은 세 가지였다.
 
-**결과:** 부팅이 "unsupported IDE command E6/00" 반복 루프에 걸려 멈췄다. 화면 출력도 없었다(25초까지 확인).
-원인은 밝히지 못했다 — ide250 BIOS가 기대하는 파티션 테이블 형식이 표준 PC MBR과 달라서일 가능성이 있지만
-확인하지 못했다. **이 경로는 이번 조사에서 막힌 채로 남겼다.**
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| "unsupported IDE command E6/00" 반복, 화면 없음 | 이미지 크기가 16헤드×32섹터 실린더 단위로 안 떨어짐(64.19 실린더) | 크기를 512섹터(1실린더) 배수로 |
+| BIOS 배너 뒤 `DI; HALT` | mtools가 넣은 x86 부트 코드를 Z80이 실행 | 부트섹터 0x1E–0x1FF를 MSX 부트 코드로 교체 |
+| "Boot error / Press any key for retry" | Nextor용 MSXDOS2.SYS v2.40 "Silent"(2286B)가 ASCII 커널에서 실패 | ASCII 정품 MSXDOS2.SYS v2.31(4870B, `~/.openMSX/diska/`) 사용 |
 
-**대체 근거:** 런처는 MSX-DOS2 표준 커널 호출만 쓸 예정이므로, ASCII DOS2 커널이든 Nextor DOS2 모드든 아키텍처
-관점에서는 같은 인터페이스다. 이전 세션에서 이미 검증된 `kittya` + `SunriseIDE_Nextor`의 **일반 DOS2 부팅**
-(에뮬레이션 아님, `A:\>` 프롬프트까지 확인됨)을 대신 DOS2 환경의 대표로 쓸 수 있다.
+추가 주의: ASCII DOS2 2.31 커널은 FAT16을 못 읽으므로 테스트 이미지는 FAT12(≤32MB)로 만든다. 250MB 이미지(FAT16)에 부트 코드를 덮어쓰면 FAT16 확장 BPB가 깨져 mtools가 FAT을 잘못 읽는다.
 
-**미확인·중요:** 매퍼 세그먼트를 실제로 몇 개 확보할 수 있는지 알아내는 표준 DOS2 API(세그먼트 할당 호출의
-정확한 함수 번호)는 이번 조사에서 **추측으로 채우지 않았다**. 잘못된 함수 번호를 코드에 박아 넣는 것이 더 위험하기
-때문이다. 공식 문서(Konamiman의 MSX-DOS2 기술 안내서 또는 ASCII 메모리 매퍼 사양)를 확보한 뒤 확정해야 한다.
+작동하는 테스트 이미지 생성 절차: `img/dos2_fat12.dsk`
+```
+python3 -c "open('dos2_fat12.dsk','wb').truncate(64*512*512)"   # 64 실린더 = 16MB
+mformat -i dos2_fat12.dsk -T 32768 -h 16 -s 32 -c 16 -M 512 -r 8 -v ASCIIDOS2 ::
+(부트섹터 0x1E-0x1FF 를 ARMI102_MIDI11.DSK 에서 복사)
+mcopy -i dos2_fat12.dsk sys_ascii/MSXDOS2.SYS sys_ascii/COMMAND2.COM ::
+openmsx -machine kittya -ext ide  (+ tcl: hda <이미지>)
+```
+
+남은 측정: 이 환경에서 TPA 상한과 빈 매퍼 세그먼트 수. 매퍼 할당 API 함수 번호는 여전히 문서 확인 후 확정.
 
 ## 5. 실기 관련 확인 필요 사항 (mister-super-expert 회신에서 나온 위험)
 
@@ -75,7 +81,7 @@ MSX-DOS2 버전 작업과는 별개 사안이지만, 같은 실기(FS-A1GT + MMC
 
 ## 다음 조사 순서 (우선순위)
 
-1. **[막힘 해소 필요 없음, 대체 완료]** DOS2 환경은 Nextor DOS2 부팅으로 대체 확정.
+1. **[해결]** ASCII DOS2 테스트 환경 부팅 성공(§4). 이 환경에서 TPA·세그먼트 측정이 다음 작업.
 2. **[사람 개입 필요]** `E25B` 브레이크포인트로 전체 플레이 세그먼트 사용 실측 — 최댓값과 페이지별 사용 패턴.
 3. **[문서 필요]** MSX-DOS2 매퍼 세그먼트 할당 API 함수 번호를 공식 자료로 확정.
 4. 파일14(시나리오) 섹터 참조 여부 확인.
