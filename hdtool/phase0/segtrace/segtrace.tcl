@@ -42,6 +42,7 @@ debug set_bp 0xF37D {} on_bdos
 proc summary {} {
     set f [open "$::T/segtrace_summary.txt" w]
     puts $f "time=[ts] disk=$::curdisk"
+    catch { puts $f "E8F5(mapper segs)=[format %02X [peek 0xE8F5]] 008F(midi/cache)=[format %02X [peek 0x008F]] E8F6=[format %02X [peek 0xE8F6]]" }
     foreach port {FC FD FE FF} {
         set vals {}
         foreach k [lsort [array names ::seen "$port=*"]] { lappend vals "[string range $k 3 end]:$::cnt($k)" }
