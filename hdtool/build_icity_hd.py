@@ -12,12 +12,15 @@ for i in range(1, 9):
     assert len(d) == DISK, i
     assert d[3:10] == f"IPROJ0{i}".encode(), d[3:10]
     regions.append(bytearray(d))
-upath = os.path.join(SRC, "I-City(k)(U).dsk")      # existing user (save) disk, optional
+upath = sys.argv[3] if len(sys.argv) > 3 else os.path.join(SRC, "I-City(k)(U).dsk")   # user (save) disk
 user = bytearray(open(upath, "rb").read()) if os.path.exists(upath) else bytearray(DISK)
 assert len(user) == DISK
-user[0:SEC] = regions[0][0:SEC]          # valid boot sector shape (original U disk has none)
-user[3:11] = b"USERDISK"                  # label != IPROJ0n -> game treats it as user disk
-print("user disk region:", upath if os.path.exists(upath) else "blank")
+# The game treats any disk whose label (+3) is not IPROJ0n as the user disk.
+# Keep a given user disk byte-for-byte; only give a blank/labelless one a boot sector.
+if not any(user[0:SEC]) or user[3:8] == b"IPROJ":
+    user[0:SEC] = regions[0][0:SEC]
+    user[3:11] = b"USERDISK"
+print("user disk region:", upath if os.path.exists(upath) else "blank", "label", bytes(user[3:11]))
 regions.append(user)
 d1 = regions[0]
 total = 9 * DISK // SEC                   # 12960 sectors
