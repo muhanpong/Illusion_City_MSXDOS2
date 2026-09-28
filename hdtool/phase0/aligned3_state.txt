@@ -1,0 +1,2 @@
+PC=0B51 SP=E9F5 A=01
+slot A8=FC

@@ -14,3 +14,19 @@ hdtool/hookpatch.bin
 
 # Emulator logs / scratch
 *.log
+
+# Backups of built images
+*.bak_*
+
+# Copyrighted binaries extracted for analysis (game code, ROM dumps, DOS2 system files)
+hdtool/phase0/segcalls/bin/
+hdtool/phase0/rom_page0.bin
+hdtool/phase0/sys_ascii/
+hdtool/phase0/bootcmp/
+*.SYS
+
+# Runtime scratch
+*.pid
+__pycache__/
+hdtool/phase0/segtrace/segtrace_summary.txt
+hdtool/phase0/segtrace/segtrace_new.log
