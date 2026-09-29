@@ -10,7 +10,7 @@
 ;   30h (sector write = save) and the save slots: 96 per disk (disk 1 and user disk). Slots 1-8 are the
 ;     game's own sectors 0578h+2n, slots 9-96 sectors 0600h+2n (patched in, beyond the disk); all live in
 ;     flash at 6B0000h in groups of 24 per sector pair (see x1img). The game's slot list gets pages
-;     (left/right, patches P1-P6 in mkcart.py, code in uiimg).
+;     (left/right on the keyboard or a joystick, patches P1-P6 in mkcart.py, code in uiimg).
 ;   More code in page 3 F13Ah-F169h, F176h-F276h, F27Fh-F322h, F325h-F340h (DOS1 kernel variables the game
 ;     never writes, measured) and page 0 0055h-007Fh / 0090h-00FFh (never written by the game).
 ;   page 3 E947h-E9FFh (never touched by the game): glyph fetch + flash helpers. mkcart.py patches the
@@ -854,6 +854,12 @@ fdone:  call    fwait
         out     (0A8h),a
         pop     af
         ret
+; joyrd: R15 = A, then A = R14 (joystick bits of the selected port)
+joyrd:  call    wr15
+        ld      a,14
+        out     (0A0h),a
+        in      a,(0A2h)
+        ret
         ENT
 envlen  equ     $-envimg
         ASSERT  ENVTOP+envlen <= ENVEND
@@ -1308,6 +1314,12 @@ cbk:    ld      a,(5EC3h)               ; medium: 1 Quick, 2 SRAM, 3 disk 1, 4 u
         ei
         ld      a,d
         cpl
+        ld      b,a
+        call    joy                     ; + joystick left/right (a gamepad on MiSTer)
+        bit     5,a
+        jr      z,1F
+        or      80h                     ; right as on the keyboard
+1:      or      b
         and     90h
         ld      b,a
         ld      a,(pkey)
@@ -1491,6 +1503,29 @@ wsave:  ld      c,a
         ld      a,b
         out     (0A8h),a
         ret
+; joy: A = joystick port 1 or 2 left -> bit 4, right -> bit 5 (1 = pressed); PSG R15 kept
+joy:    di
+        ld      a,15
+        out     (0A0h),a
+        in      a,(0A2h)
+        ld      e,a
+        and     0BFh                    ; R15 bit 6 = 0: port 1
+        call    joyrd
+        ld      d,a
+        ld      a,e
+        or      40h                     ; port 2
+        call    joyrd
+        and     d                       ; 0 = pressed on either port
+        ld      d,a
+        ld      a,e
+        call    wr15
+        ei
+        ld      a,d
+        cpl
+        and     0Ch                     ; bit 2 left, bit 3 right
+        rlca
+        rlca                            ; left -> bit 4, right -> bit 5
+        ret
 dzx0:
         INCLUDE "zx0/dzx0_standard.asm"   ; ZX0 decoder by Einar Saukas & Urusergi (BSD-3, zx0/LICENSE)
         ENT
@@ -1520,6 +1555,12 @@ wlim:   db      0
 wleft:  db      0
 wsrc:   dw      0
 tmpi:   db      0
+wr15:   push    af                      ; PSG R15 = A
+        ld      a,15
+        out     (0A0h),a
+        pop     af
+        out     (0A1h),a
+        ret
         ENT
 x3len   equ     $-x3img
         ASSERT  X3BASE+x3len <= X3END
