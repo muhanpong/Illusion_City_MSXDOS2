@@ -35,3 +35,5 @@ hdtool/mkdos2/sjasmplus
 hdtool/mkdos2/icity.lst
 hdtool/mkdos2/sys_ascii/
 dist/
+dist_img/
+*.zip
