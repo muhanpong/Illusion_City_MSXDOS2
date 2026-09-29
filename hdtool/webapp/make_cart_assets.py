@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory() as tmp:
         ui = [{'addr': a, 'orig': o.hex(), 'new': n.hex()} for a, (o, n) in sorted(mkcart.ui_patches(syms).items())]
         assert out.setdefault('ui', ui) == ui, 'page-3 UI addresses differ between mappers'
         assert boot[fray:fray + FRAYLEN] == bytes(FRAYLEN)
-        out['mappers'].append({'tag': tag, 'name': {'YAMA': 'Yamanooto', 'A16X': 'ASCII16-X'}[tag],
+        out['mappers'].append({'tag': tag, 'name': {'YAMA': 'Yamanooto', 'A16X': 'ASCII16-X'}[tag], 'fileSize': mkcart.FILESIZE[tag],
                                'boot': base64.b64encode(boot).decode(), 'frayOff': fray})
 path = os.path.join(here, 'assets.json')
 assets = json.load(open(path))
