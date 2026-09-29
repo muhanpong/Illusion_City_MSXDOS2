@@ -358,7 +358,7 @@
     log(nsec + ' sectors (' + where.size + ' distinct) packed to ' + Math.round(used / 1024) + 'KB');
     const out = [];
     for (const m of C.mappers) {
-      const rom = new Uint8Array(m.fileSize || C.romSize).fill(0xFF);   // ASCII16-X: 8MB file for the MiSTer core
+      const rom = new Uint8Array(m.fileSize || C.romSize).fill(0xFF);
       rom.set(b64(m.boot), 0);
       rom.set(fray, m.frayOff);
       rom.set(lo, C.tblLo); rom.set(hi, C.tblHi);

@@ -4,8 +4,10 @@
 DOS2판(`hdtool/mkdos2`, 배포 zip, 웹앱)은 완료 상태이며 이 작업과 별개다.
 
 ## 0. 현재 상태
-- **ROM은 4MB**(4MB 이상 플래시면 됨; **ASCII16-X 파일만 뒤를 FFh로 채운 8MB** — MiSTer MSX 코어가 4MB 초과 파일만
-  ASCII16-X(플래시)로 인식, `memory_upload.sv` rom_big = size > 400000h. 정확히 4MB면 플래시 없는 ASCII16이 되어 세이브가 조용히 실패): 섹터 12960개 중 중복을 뺀 8059개를 섹터마다 ZX0로 압축(안 줄면 원본), 3029KB.
+- **ROM은 4MB**(4MB 이상 플래시면 됨). **ASCII16-X 파일만 오프셋 0010h(4010h–4017h)에 `"ASCII16X"` 서명**: openMSX(guessRomType)와
+  MiSTer 코어(`mapper_detect.sv`, OSD 매퍼 auto)가 크기와 상관없이 ASCII16-X(플래시)로 고른다. 전에는 코어가 4MB 초과 파일만
+  플래시로 인식해(`memory_upload.sv` rom_big, OSD에서 ASCII16X를 직접 고를 때는 지금도 이 규칙) 8MB로 채웠다(22a8a85). Yamanooto 파일은 그 자리가 FFh
+  (서명을 넣으면 auto가 ASCII16-X로 잘못 고름): 섹터 12960개 중 중복을 뺀 8059개를 섹터마다 ZX0로 압축(안 줄면 원본), 3029KB.
   섹터 표(2바이트 배열 004000h + 1바이트 배열 00A600h: 8KB 뱅크, 뱅크 안 오프셋, 원본 여부)로 찾아 읽을 때 푼다.
   압축기: ZX0 v2.2 참조판(zx0/src, BSD-3, mkcart가 cc로 빌드), 압축 해제: dzx0_standard(68바이트, zx0/). 웹 도구에는 같은
   압축기의 JS 이식(8059개 섹터 모두 C와 바이트 일치). 시험 ROM: 섹터당 R800 2.0ms / Z80 11ms(원본 복사 0.7/3.3ms).
@@ -17,7 +19,7 @@ DOS2판(`hdtool/mkdos2`, 배포 zip, 웹앱)은 완료 상태이며 이 작업�
   목적지가 페이지 1/2에 걸친 섹터는 창을 페이지 0(카트리지 거울)에 연다(지금까지 627건 중 0건).
   검증(openMSX, 두 매퍼): 진행 FM 125·MIDI 500·세이브 8 로드 125회 읽기 불일치 0, 표준 GT 글꼴 1068회 불일치 0,
   확장 슬롯 저장 → 재시작 16/16(유저 디스크 두 번, 디스크 1 한 번; 묶음이 예비로 옮겨가고 세대 비교 정상).
-- `cart.asm` + `mkcart.py`로 8MB ROM 두 개(`ICITY_YAMA.rom`, `ICITY_A16X.rom`)가 나온다. **openMSX(kittya, 드라이브 비움)에서 부팅·진행 확인**:
+- `cart.asm` + `mkcart.py`로 4MB ROM 두 개(`ICITY_YAMA.rom`, `ICITY_A16X.rom`)가 나온다. **openMSX(kittya, 드라이브 비움)에서 부팅·진행 확인**:
   - 스타트 지점 → 디스크 2 → 미홍 대화 메뉴: FM 125회, MIDI 500회 읽기, 디스크 이미지와 **불일치 0** (두 매퍼).
   - 유저 디스크 세이브 7·8 로드 → 디스크 4·6 진입(2MB 넘는 뱅크, Yamanooto OFFR 경로): 114·125회, 불일치 0 (두 매퍼).
   - 슬롯 확장기 뒤(1-0)에 꽂은 경우(페이지 0 도우미 경로): 125회, 불일치 0.

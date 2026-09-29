@@ -57,6 +57,14 @@ FONTSEC equ 1880h               ; ROM offset of the font (310000h) in 512-byte s
         ORG 4000h
         db "AB"
         dw init, 0, 0, 0, 0, 0, 0
+        ; 4010h-4017h (file offset 10h): the ASCII16-X file carries the signature that makes openMSX and the MiSTer
+        ; core pick the ASCII16-X (flash) mapper by itself at any file size. Not in the Yamanooto file (auto would
+        ; take it as ASCII16-X); 8 bytes of FFh there so that both builds keep the same code addresses.
+        IF MAPPER == 2
+        db "ASCII16X"
+        ELSE
+        ds 8,0FFh
+        ENDIF
 
 ; ---------------------------------------------------------------------------------------------
 ; INIT: runs from page 1 of the cartridge.
