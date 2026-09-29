@@ -33,6 +33,12 @@
         DEFINE FRAY_SEC 14
         DEFINE FRAY_CNT 7
         DEFINE SAVE_SEC 0578h
+        DEFINE EXTSEC   0600h           ; save slots 9-96 (paged slot list, patches P1-P6): sector EXTSEC + 2*(slot-8)
+        DEFINE SLOTS    96              ; per disk; the save files hold them all (96KB, slot n at n*1KB)
+        DEFINE UI_SECOF   0E9DBh        ; slot-list paging entry points (patches.py P1-P6 use the same numbers)
+        DEFINE UI_NEWLIST 0E9EAh
+        DEFINE UI_FIXNO   0E9F7h
+        DEFINE UI_FIXSEL  00F6h
 
 ; ---------------------------------------------------------------- .COM header: move body to C000h
         ORG 0100h
@@ -67,6 +73,7 @@ body:
         ld      (jt),hl
         ld      a,c
         ld      (nfree),a
+        call    grow_saves
         ld      de,s_free
         call    prs
         ld      a,(nfree)
@@ -201,6 +208,14 @@ body:
         ld      hl,glyph_wrap_img       ; glyph fetch wrapper at E980h (file7 patch G1 jumps here)
         ld      de,WIN+(GLYPHW-0C000h)
         ld      bc,gw_end-glyph_wrap
+        ldir
+        ld      hl,ui_img               ; slot-list paging (file9 patches P1-P6 call it)
+        ld      de,WIN+(0E9AAh-0C000h)
+        ld      bc,ui_end-cbk
+        ldir
+        ld      hl,ui2_img
+        ld      de,WIN+(0E951h-0C000h)
+        ld      bc,ui2_end-pkey
         ldir
         ld      hl,WIN+(0F37Dh-0C000h)  ; F37D: JP 0090
         ld      (hl),0C3h
@@ -485,9 +500,9 @@ xfer:
         pop     hl
         call    min_hl_de
         ld      (x_n),hl
-        ; seek to (x_sec - c_start)*512 + x_off   (20-bit)
+        ; seek to (x_sec - c_base)*512 + x_off   (20-bit)
         ld      hl,(x_sec)
-        ld      de,(c_start)
+        ld      de,(c_base)
         or      a
         sbc     hl,de
         ld      a,l
@@ -737,8 +752,27 @@ min_hl_de:                              ; HL = min(HL,DE)
         ex      de,hl
         ret
 
-; chunk_find: chunk containing x_sec on cur_disk -> c_start, c_end; file open -> x_h
+; chunk_find: chunk containing x_sec on cur_disk -> c_start, c_end, c_base (file position = (x_sec - c_base)*512);
+; file open -> x_h. Sectors >= EXTSEC of disk 1 / the user disk are save slots 9-96: the save chunk (0578h),
+; after its own 16 sectors.
 chunk_find:
+        ld      a,(cur_disk)
+        or      a
+        jr      z,.sv
+        cp      8
+        jr      nz,.nosv
+.sv:    ld      hl,(x_sec)
+        ld      de,EXTSEC
+        or      a
+        sbc     hl,de
+        jr      c,.nosv
+        ld      hl,SAVE_SEC
+        ld      (c_start),hl
+        ld      hl,EXTSEC-16
+        ld      (c_base),hl
+        ld      de,EXTSEC+(SLOTS-8)*2
+        jr      .end2
+.nosv:
         ld      a,(cur_disk)
         add     a,a
         ld      e,a
@@ -764,7 +798,9 @@ chunk_find:
         ld      (c_start),de
         djnz    .loop
         ld      de,1440
-.end:   ld      (c_end),de
+.end:   ld      hl,(c_start)
+        ld      (c_base),hl
+.end2:  ld      (c_end),de
         ; cached handle?
         ld      a,(cur_disk)
         ld      e,a
@@ -820,6 +856,71 @@ chunk_find:
         inc     hl
         ld      (hl),d
         ret
+
+; grow_saves: the save files hold SLOTS slots (96KB) since the paged slot list; older 8KB ones grow here (zeros).
+; Runs at start, while page 2 is still DOS2's TPA (8000h-81FFh = zero buffer).
+grow_saves:
+        ld      hl,8000h
+        ld      de,8001h
+        ld      bc,511
+        ld      (hl),0
+        ldir
+        xor     a
+        call    .one
+        ld      a,8
+        call    .one
+        xor     a
+        ld      (cur_disk),a            ; the game starts on disk 1
+        ret
+.one:   ld      (cur_disk),a
+        ld      hl,SAVE_SEC
+        ld      (c_start),hl
+        call    mk_name
+        ld      de,fname
+        xor     a                       ; read/write
+        ld      c,43h                   ; _OPEN
+        call    BDOS
+        or      a
+        jp      nz,e_dos
+        ld      a,b
+        ld      (x_h),a
+        ld      de,0
+        ld      hl,0
+        ld      a,2                     ; from the end: DE:HL = size
+        ld      c,4Ah                   ; _SEEK
+        call    BDOS
+        or      a
+        jp      nz,e_dos
+.lp:    ld      a,d                     ; size < SLOTS*1KB (18000h)?
+        or      a
+        jr      nz,.done
+        ld      a,e
+        cp      1
+        jr      c,.wr
+        jr      nz,.done
+        bit     7,h
+        jr      nz,.done
+.wr:    push    de
+        push    hl
+        ld      a,(x_h)
+        ld      b,a
+        ld      de,8000h
+        ld      hl,512
+        ld      c,49h                   ; _WRITE
+        call    BDOS
+        or      a
+        jp      nz,e_dos
+        pop     hl
+        pop     de
+        ld      bc,512
+        add     hl,bc
+        jr      nc,.lp
+        inc     de
+        jr      .lp
+.done:  ld      a,(x_h)
+        ld      b,a
+        ld      c,45h                   ; _CLOSE
+        jp      BDOS
 
 ; mk_name: "\ICITY\<dir>\<tag>_<hex4>.DAT",0 into fname; is_save flag
 mk_name:
@@ -1042,6 +1143,7 @@ x_fn:    db 0
 x_h:     db 0
 c_start: dw 0
 c_end:   dw 0
+c_base:  dw 0
 is_save: db 0
 vdp_ports: db 98h,98h
 hnd:     ds 9,0FFh
@@ -1106,11 +1208,92 @@ stub_p2:
         out     (0FDh),a
         ld      sp,GAME_SP
         jp      0100h
+fixsel: ld      b,a                     ; P3 5910h: slot selected = page*8 + row (file7's page-0 segment has it too)
+        call    pg8
+        ld      (5EC5h),a
+        ret
 stub_end:
         ENT
 stub_len equ stub_end-stub
         ASSERT stub_len <= 0070h
 img_end:
+
+; ---------------------------------------------------------------- slot-list paging (game page 3 E9AAh-E9FFh + E951h-E95Fh)
+; The game's slot list (file9 58C0h) shows 8 slots; file9 patches P1-P6 (patches.py, fixed addresses checked below)
+; make it show page*8+1 .. page*8+8, left/right switching pages on the disk media (SRAM / Quick stay as they are).
+; Only launcher-owned bytes are used: the DOS2 kernel copy in game page 3 (e.g. Nextor's F1E8h jump table) is live.
+ui_img:
+        DISP 0E9AAh
+cbk:    ld      a,(5EC3h)               ; P1 590Ah LD HL,cbk: called by the menu loop (file7 308Ah)
+        cp      3                       ; medium: 1 Quick, 2 SRAM, 3 disk 1, 4 user disk
+        ret     c
+        in      a,(0AAh)                ; keyboard row 8 (the BIOS selects its row itself before each scan)
+        and     0F0h
+        or      8
+        out     (0AAh),a
+        in      a,(0A9h)                ; bit 4 left, bit 7 right (0 = pressed)
+        cpl
+        and     90h
+        ld      hl,pkey
+        ld      c,(hl)
+        ld      (hl),a
+        ld      b,a
+        ld      a,c
+        cpl
+        and     b                       ; newly pressed
+        inc     hl                      ; page
+        rla
+        jr      c,.right
+        and     20h
+        ret     z
+        ld      a,(hl)
+        or      a
+        ret     z
+        dec     (hl)
+        jr      .set
+.right: ld      a,(hl)
+        cp      SLOTS/8-1
+        ret     nc
+        inc     (hl)
+.set:   jp      5944h                   ; rebuild the 8 rows
+secof:  ld      hl,SAVE_SEC             ; P5/P6 5A66h/5A8Fh: sector of slot E (D = 0)
+        ld      a,e
+        sub     8
+        jr      c,.lo
+        ld      e,a
+        ld      hl,EXTSEC
+.lo:    add     hl,de
+        add     hl,de
+        ret
+newlist: ld     a,(5EC3h)               ; P4 58E3h: opening the list; SRAM (8 slots) starts on page 0
+        cp      3
+        jr      nc,.keep
+        xor     a
+        ld      (page),a
+.keep:  jr      cbk.set
+fixno:  ld      b,a                     ; P2 5957h: number shown = page*8 + row (B is free there)
+        call    pg8
+        ld      (0D56Ah),a
+        ld      a,b
+        ret
+ui_end:
+        ENT
+        ASSERT ui_end <= 0EA00h
+ui2_img:
+        DISP 0E951h
+pkey:   db      0
+page:   db      0                       ; right after pkey (cbk)
+pg8:    ld      a,(page)                ; A = page*8 + B
+        add     a,a
+        add     a,a
+        add     a,a
+        add     a,b
+        ret
+ui2_end:
+        ENT
+        ASSERT ui2_end <= 0E960h        ; TBL
+        ; patches.py (P1-P6) uses these addresses
+        ASSERT cbk == 0E9AAh && fixno == UI_FIXNO && fixsel == UI_FIXSEL && newlist == UI_NEWLIST && secof == UI_SECOF
 
 ; ---------------------------------------------------------------- glyph wrapper (runs in game page 3 at E980h)
 ; replaces the body of the game's Kanji-ROM glyph reader (file7 2AB9h, patch G1 = JP E980h).
