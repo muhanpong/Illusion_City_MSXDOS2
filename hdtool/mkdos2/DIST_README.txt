@@ -5,6 +5,10 @@
   - MSX turbo R (FS-A1GT) 512KB, MSX-DOS2 (내장 ASCII DOS2 또는 Nextor) 로 부팅되는 SD/CF/IDE 저장장치
   - 빈 공간 약 10MB, 한자 ROM은 필요 없음 (ICITY\FONT.BIN 을 사용)
 
+FAT16 램상주 드라이버를 쓰는 경우
+  - 드라이버를 먼저 띄운 다음 ICITY 를 실행한다. 런처는 그때 남은 빈 매퍼 세그먼트 수를 재서 모드를 고른다.
+  - 런처는 DOS 인터럽트 훅(H.KEYI)을 잠시 가로채지만 원래 훅 내용을 이어서 실행한다.
+
 설치
   1. 이 폴더 안의 ICITY.COM 과 ICITY 폴더를 저장장치의 루트에 그대로 복사한다.
        X:\ICITY.COM

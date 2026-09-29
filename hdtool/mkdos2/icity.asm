@@ -271,6 +271,10 @@ body:
         ; VDP line-interrupt flag (S#1).  The game arms both; without this every EI inside DOS2 re-enters the BIOS
         ; handler forever (interrupt storm: _OPEN/_READ never returns, growing stack or livelock).
         di
+        ld      hl,0FD9Ah               ; keep whatever H.KEYI held (a resident driver may use it) and run it after
+        ld      de,orig_keyi
+        ld      bc,5
+        ldir
         ld      a,0C3h
         ld      (0FD9Ah),a
         ld      hl,dos_keyi
@@ -333,7 +337,8 @@ dos_keyi:
         ld      a,8Fh
         out     (99h),a                 ; R#15 = 0 for the BIOS handler that follows
         pop     af
-        ret
+        jp      orig_keyi               ; the previous hook (RET, or a resident driver's code)
+orig_keyi: db 0C9h,0C9h,0C9h,0C9h,0C9h,0C9h
 
 ; ---------------------------------------------------------------- service (DOS2 environment)
 ; entered from the stub: SP = dos_stack, request in game page 3 (RSEC/RHL/RFN/DTA)
