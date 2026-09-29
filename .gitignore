@@ -30,3 +30,6 @@ hdtool/phase0/bootcmp/
 __pycache__/
 hdtool/phase0/segtrace/segtrace_summary.txt
 hdtool/phase0/segtrace/segtrace_new.log
+hdtool/mkdos2/sys/
+hdtool/mkdos2/sjasmplus
+hdtool/mkdos2/icity.lst
