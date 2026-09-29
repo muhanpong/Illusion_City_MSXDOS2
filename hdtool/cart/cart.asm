@@ -31,8 +31,10 @@ HIMEM   equ 0FC4Ah
 BDOSJP  equ 0F37Dh
 SUBREG  equ 0FFFFh
 WANTDSK equ 5EC0h               ; engine: wanted disk (0-7 = 1-8, 10 = user disk), in page 1
-DATASEC equ 128                 ; ROM offset of disk 1 sector 0, in 512-byte sectors (10000h)
-SAVESEC equ 3580h               ; ROM offset of the save slots (6B0000h, 8 pairs of 64KB), mkcart.py SAVE
+SAVESEC equ 1A80h               ; save area 350000h: 9 flash sectors of 64KB (mkcart.py SAVE)
+NSAVE   equ 9
+TBLLO   equ 4000h               ; sector table (mkcart.py TBLLO/TBLHI)
+TBLHI   equ 0A600h
 ENVTOP  equ 0DD92h              ; interrupt stack grows down from here (as the DOS1 environment)
 ENVEND  equ 0DF7Eh
 RESBASE equ 0EF80h              ; see the header
@@ -49,7 +51,7 @@ X3BASE  equ 0F325h
 X3END   equ 0F341h
 GLYPHW  equ 0E947h              ; patch G1 jumps here (E947h-E9FFh: glyph fetch + flash helpers)
 GLYEND  equ 0EA00h
-FONTSEC equ 3320h               ; ROM offset of the font (664000h) in 512-byte sectors (mkcart.py FONT)
+FONTSEC equ 1880h               ; ROM offset of the font (310000h) in 512-byte sectors (mkcart.py FONT)
 
         OUTPUT "cart.bin"
         ORG 4000h
@@ -175,6 +177,7 @@ init:   di
         ld      (0F368h),a
         ld      (0F36Bh),a
         ld      (0F36Eh),a
+        call    scan                    ; save map (group -> flash sector, spare) from the headers
         ; leave page 1 from page 3 code
         ld      hl,golaunch
         ld      de,0C000h
@@ -227,6 +230,170 @@ rep55:  ld      b,a
         or      b
         ret
 
+; ---------------------------------------------------------------------------------------------
+; save-slot code that runs from this ROM bank (page 1): at INIT (scan) and through wsave (the rest)
+; scan: per group the sector with a valid header and the newest generation (cbuf holds the generations
+; meanwhile); the sector nobody holds is the spare
+scan:   ld      hl,gsec
+        ld      b,8
+.c:     ld      (hl),0FFh
+        inc     hl
+        djnz    .c
+        xor     a
+.s:     ld      (tmpi),a
+        call    rdhdr
+        ld      hl,hbuf
+        ld      a,(hl)
+        cp      'I'
+        jr      nz,.nx
+        inc     hl
+        ld      a,(hl)
+        cp      'C'
+        jr      nz,.nx
+        inc     hl
+        ld      a,(hl)
+        cp      8
+        jr      nc,.nx
+        ld      (tgrp),a
+        inc     hl
+        ld      c,(hl)
+        inc     hl
+        ld      b,(hl)                  ; BC = generation
+        call    gsecp
+        ld      a,(hl)
+        inc     a
+        jr      z,.take
+        push    hl
+        ld      a,(tgrp)
+        add     a,a
+        add     a,LOW cbuf
+        ld      l,a
+        ld      h,HIGH cbuf
+        ld      a,c
+        sub     (hl)
+        ld      e,a
+        inc     hl
+        ld      a,b
+        sbc     a,(hl)
+        pop     hl
+        jp      m,.nx                   ; older
+        or      e
+        jr      z,.nx
+.take:  ld      a,(tmpi)
+        ld      (hl),a
+        ld      a,(tgrp)
+        add     a,a
+        add     a,LOW cbuf
+        ld      l,a
+        ld      h,HIGH cbuf
+        ld      (hl),c
+        inc     hl
+        ld      (hl),b
+.nx:    ld      a,(tmpi)
+        inc     a
+        cp      NSAVE
+        jr      c,.s
+        ld      c,0                     ; spare = first sector no group holds
+.f:     ld      hl,gsec
+        ld      b,8
+        ld      a,c
+.g:     cp      (hl)
+        jr      z,.u
+        inc     hl
+        djnz    .g
+        ld      (spare),a
+        ret
+.u:     inc     c
+        jr      .f
+; wslot: A = slot (0-191). Copies the slot's group (24 slots) from its flash sector into the spare one with the
+; new slot, then writes the header ('IC', group, generation + 1) last; the old sector becomes the spare. NZ = timeout.
+wslot:  call    grp
+        call    curof
+        ld      (wsw),a
+        ld      a,(spare)
+        ld      (wdst),a
+        call    p128
+        ex      de,hl
+        call    erase64
+        ret     nz
+        ld      b,0                     ; B = position 0-23, C = 32-byte chunk 0-31
+.pos:   ld      c,0
+.chk:   push    bc
+        call    fetch
+        pop     bc
+        jr      z,.next
+        push    bc
+        ld      a,(wdst)
+        call    chsec
+        call    prog32
+        pop     bc
+        ret     nz
+.next:  inc     c
+        ld      a,c
+        cp      32
+        jr      c,.chk
+        inc     b
+        ld      a,b
+        cp      24
+        jr      c,.pos
+        jp      whdr
+; fetch: B = position, C = chunk -> cbuf = the 32 bytes the new sector gets there (the new slot from RAM,
+; the others from the current sector). Z = all FFh (nothing to program).
+fetch:  ld      a,(tpos)
+        cp      b
+        jr      nz,.fl
+        ld      a,c
+        ld      hl,wlim
+        cp      (hl)
+        jr      c,.ram
+.fl:    call    flget
+        jr      .done
+.ram:   ld      l,c
+        ld      h,0
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        ld      de,(wsrc)
+        add     hl,de
+        ld      de,cbuf
+        ld      bc,32
+        ldir
+.done:  jp      allff
+; flget: B = position, C = chunk -> cbuf from the group's current sector
+flget:  ld      a,(wsw)
+        call    chsec
+        ld      hl,cbuf
+        ld      bc,32
+        jp      xfer
+; whdr: the new sector's header ('IC', group, generation + 1) last, then it holds the group, the old one is spare
+whdr:   ld      a,(wsw)
+        call    rdhdr
+        ld      hl,(hbuf+3)
+        inc     hl
+        ld      (cbuf+3),hl
+        ld      hl,'I'+'C'*256
+        ld      (cbuf),hl
+        ld      a,(tgrp)
+        ld      (cbuf+2),a
+        ld      a,(wdst)
+        call    p128
+        ld      de,60h
+        add     hl,de
+        ex      de,hl
+        ld      hl,0
+        ld      (soff),hl
+        call    prog32
+        ret     nz
+        ld      a,(wsw)
+        ld      (spare),a
+        call    gsecp
+        ld      a,(wdst)
+        ld      (hl),a
+        xor     a
+        ret
+
 
 ; ---------------------------------------------------------------------------------------------
 ; page 0 image
@@ -265,91 +432,94 @@ subr:   out     (0A8h),a
         ld      a,c
         out     (0A8h),a
         ret
-; 0055h-0086h and 0090h-00FFh: never written by the game (the page is copied to the game's page-0
-; segments at start, so this code is there whenever F37D is called). The save-slot copy lives here.
-; fetch: B = position, C = chunk -> cbuf = the 32 bytes the new sector gets there (the new slot from
-; RAM, the others from the current sector). Z = all FFh (nothing to program).
-fetch:  ld      a,(tpos)
-        cp      b
-        jr      nz,.fl
+; 0055h-007Fh and 0090h-00FFh: never written by the game (the page is copied to the game's page-0 segments at
+; start, so this code is there whenever F37D is called; nothing here runs while the flash window is on page 0).
+; erase64: DE = first ROM sector of a 64KB flash sector. NZ = timeout.
+erase64: ld     hl,0
+        ld      (soff),hl
+        call    fmap
+        ld      a,80h
+        call    fcmd
+        call    unlock
+        ld      (hl),30h
+        ld      c,0FFh
+        jp      fdone
+        ASSERT  $ <= 80h
+        ds      80h-$,0
+        db      0,0,0,98h,98h,23h,0F3h,0 ; 0080h-0087h as the original boot sector leaves them
+        ds      90h-$,0
+; p128: A = flash save sector 0-8 -> HL = its first ROM sector (SAVESEC + A*128)
+p128:   rrca
+        ld      h,a
+        and     80h
+        ld      l,a
+        xor     h
+        ld      h,a
+        ld      de,SAVESEC
+        add     hl,de
+        ret
+; possec: A = position 0-23 -> A = its sector within the flash sector (bank*32 + (p mod 8)*2)
+possec: push    bc
+        ld      b,a
+        and     7
+        add     a,a
+        ld      c,a
+        ld      a,b
+        and     18h
+        add     a,a
+        add     a,a
+        add     a,c
+        pop     bc
+        ret
+; slotsec: A = flash sector -> DE = ROM sector of slot position tpos, half thalf
+slotsec: call   p128
+        ld      a,(tpos)
+        call    possec
+        ld      e,a
+        ld      a,(thalf)
+        add     a,e
+        ld      e,a
+        ld      d,0
+        add     hl,de
+        ex      de,hl
+        ret
+; chsec: A = flash sector, B = position, C = chunk 0-31 -> DE = ROM sector, (soff)
+chsec:  call    p128
+        ld      a,b
+        call    possec
+        ld      e,a
         ld      a,c
-        ld      hl,wlim
-        cp      (hl)
-        jr      c,.ram
-.fl:    call    flget
-        jr      .done
-.ram:   ld      l,c
+        and     10h
+        rrca
+        rrca
+        rrca
+        rrca
+        add     a,e
+        ld      e,a
+        ld      d,0
+        add     hl,de
+        ex      de,hl
+        ld      a,c
+        and     0Fh
+        ld      l,a
         ld      h,0
         add     hl,hl
         add     hl,hl
         add     hl,hl
         add     hl,hl
         add     hl,hl
-        ld      de,(wsrc)
+        ld      (soff),hl
+        ret
+; rdhdr: A = flash sector -> hbuf = its header ('I','C', group, generation)
+rdhdr:  call    p128
+        ld      de,60h
         add     hl,de
-        ld      de,cbuf
-        ld      bc,32
-        ldir
-.done:  jp      allff
-        ASSERT  $ <= 80h
-        ds      80h-$,0
-        db      0,0,0,98h,98h,23h,0F3h,0 ; 0080h-0087h as the original boot sector leaves them
-        ds      90h-$,0
-; wslot: A = slot (0-191). Copies the slot's group (24 slots) from its current flash sector into the other
-; one with the new slot data, then writes the header (source generation + 1) last. NZ = flash timeout.
-wslot:  call    grp
-        call    invcur                  ; re-read both headers: hdrA/hdrB hold the generations
-        call    curof
-        ld      (wsw),a
-        xor     1
-        rrca
-        ld      e,a
-        call    pairde
-        call    erase64
-        ret     nz
-        ld      b,0                     ; B = position 0-23, C = 32-byte chunk 0-31
-.pos:   ld      c,0
-.chk:   push    bc
-        call    fetch
-        pop     bc
-        jr      z,.next
-        push    bc
-        ld      a,(wsw)
-        xor     1
-        call    chsec
-        call    prog32
-        pop     bc
-        ret     nz
-.next:  inc     c
-        ld      a,c
-        cp      32
-        jr      c,.chk
-        inc     b
-        ld      a,b
-        cp      24
-        jr      c,.pos
-        ld      a,(wsw)                 ; header: 'IC' + generation + 1
-        add     a,a
-        add     a,a
-        ld      e,a
-        ld      d,0
-        ld      hl,hdrA+2
-        add     hl,de
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        inc     de
-        ld      (cbuf+2),de
-        ld      hl,'I'+'C'*256
-        ld      (cbuf),hl
-        ld      a,(wsw)
-        xor     1
-        call    hdrsec
+        ex      de,hl
         ld      hl,0
         ld      (soff),hl
-        call    prog32
-        ret     nz
-        jp      invcur                  ; next access reads the headers again
+        ld      hl,hbuf
+        ld      bc,5
+        jp      xfer
         ASSERT  $ <= 100h
         ds      100h-$,0
         ENT
@@ -611,7 +781,7 @@ wrabs:  ld      a,h
         ld      a,32
 .half:  ld      (wlim),a                ; chunks of the slot that come from RAM (16 = only the even half)
         ld      a,c
-        call    wslot
+        call    wsave
         jr      nz,.err
 .nx:    pop     de
         inc     de
@@ -630,34 +800,21 @@ wrabs:  ld      a,h
         ei
         ret
 
-; fmap: DE = ROM sector -> cartridge in page 2 on it, Yamanooto WREN on, HL = its address, B = 80h
+; fmap: DE = ROM sector, (soff) -> cartridge in page 2 there, Yamanooto WREN on, HL = the address, B = 80h
 fmap:   ld      a,80h
         ld      (wpg),a
-        ld      h,40h
-        call    curslot
-        ld      (sv1),a
-        ld      h,80h
-        call    curslot
-        ld      (sv2),a
+        in      a,(0A8h)
+        ld      (sa8),a
+        call    sec2b
         call    setbank
         ld      a,10h
         call    wren
         ld      b,80h
         ret
-; erase64: DE = first ROM sector of a 64KB flash sector. NZ = timeout.
-erase64: call   fmap
-        ld      a,80h
-        call    fcmd
-        call    unlock
-        ld      (hl),30h
-        ld      c,0FFh
-        jr      fdone
 ; prog32: DE = ROM sector, (soff) = offset -> program the 32 bytes of cbuf there, byte by byte (A0h: the
 ; command every flash emulation has; the MiSTer cores ignore write-buffer programming). FFh bytes are skipped
 ; (the sector was just erased). NZ = timeout.
-prog32: call    fmap
-        ld      de,(soff)
-        add     hl,de
+prog32: call    fmap                    ; HL = target (soff included)
         ld      de,cbuf
         ld      a,32
 .l:     push    af
@@ -682,7 +839,13 @@ prog32: call    fmap
 fdone:  call    fwait
         jr      z,.ok
 .bad:   ld      (hl),0F0h               ; reset to read mode
-.ok:    jp      funmap
+.ok:    push    af                      ; funmap: WREN off, pages back
+        xor     a
+        call    wren
+        ld      a,(sa8)
+        out     (0A8h),a
+        pop     af
+        ret
         ENT
 envlen  equ     $-envimg
         ASSERT  ENVTOP+envlen <= ENVEND
@@ -717,42 +880,19 @@ rdabs:  ld      a,d
 .go:    ld      b,h                     ; B = count, DE = disk sector
         ld      hl,(dta)
 .sec:   push    bc
-        push    de
-        call    romsec
-        ld      bc,512
-        ld      (left),bc
-        ld      bc,0
-        ld      (soff),bc
-.chunk: push    hl                      ; n = min(left, room to the end of the destination page)
-        ld      a,h
-        and     3Fh
-        ld      b,a
-        ld      c,l
-        ld      hl,4000h
-        or      a
-        sbc     hl,bc
-        ld      bc,(left)
-        or      a
-        sbc     hl,bc
-        jr      nc,.all
-        add     hl,bc
-        ld      b,h
-        ld      c,l
-.all:   pop     hl
-        call    xfer
         push    hl
-        ld      hl,(left)
-        or      a
-        sbc     hl,bc
-        ld      (left),hl
-        ld      a,h
-        or      l
-        ld      hl,(soff)
-        add     hl,bc
-        ld      (soff),hl
-        pop     hl
-        jr      nz,.chunk
+        push    de
+        call    locate
         pop     de
+        pop     hl
+        push    hl
+        push    de
+        ex      de,hl
+        call    getsec
+        pop     de
+        pop     hl
+        inc     h
+        inc     h
         inc     de
         pop     bc
         djnz    .sec
@@ -760,107 +900,155 @@ rdabs:  ld      a,d
         ei
         ret
 
-; xfer: copy BC bytes from ROM sector DE + (soff) to HL. HL advanced, BC and DE kept.
-; The window is page 2, or page 1 when the destination is in page 2.
-xfer:   push    de
-        push    bc
+; locate: DE = sector of the current disk -> sbank/soffs/scnt of its data (scnt 0 = ZX0, else bytes to copy)
+locate: call    savslot
+        jr      c,.dat
+        call    grp                     ; a save slot: raw, in the group's flash sector
+        call    curof
+        call    slotsec
+        ld      hl,0
+        ld      (soff),hl
+        call    sec2b
+        jr      .raw
+.dat:   ld      a,(cur)
+        ld      hl,-1440
+        ld      bc,1440
+.m:     add     hl,bc
+        dec     a
+        jr      nz,.m
+        add     hl,de                   ; HL = table index
+        push    hl
+        ld      a,h                     ; low word at TBLLO + 2*index
+        add     a,TBLLO/512
+        ld      e,a
+        ld      d,0
+        ld      h,d
+        add     hl,hl
+        ld      (soff),hl
+        ld      hl,tent
+        ld      bc,2
+        call    xfer
+        pop     hl                      ; high byte at TBLHI + index
+        ld      a,h
+        srl     a
+        add     a,TBLHI/512
+        ld      e,a
+        ld      d,0
+        ld      a,h
+        and     1
+        ld      h,a
+        ld      (soff),hl
+        ld      hl,tent+2
+        ld      bc,1
+        call    xfer
+        ld      hl,(tent)               ; bits 0-12 offset, 13 raw, 14-23 bank
+        ld      a,h
+        and     1Fh
+        ld      h,a
+        ld      (soffs),hl
+        ld      a,(tent+2)
+        ld      l,a
+        ld      h,0
+        add     hl,hl
+        add     hl,hl
+        ld      a,(tent+1)
+        rlca
+        rlca
+        and     3
+        or      l
+        ld      l,a
+        ld      (sbank),hl
+        ld      a,(tent+1)
+        and     20h
+        ld      hl,0
+        jr      z,.set
+.raw:   ld      hl,512
+.set:   ld      (scnt),hl
+        ret
+
+; getsec: DE = destination -> the data at sbank/soffs there (ZX0 when scnt = 0, else scnt bytes copied).
+; The window is page 2, or page 1 when the destination touches page 2, or page 0 when it touches pages 1 and 2.
+getsec: ld      hl,511
+        add     hl,de
+        ld      a,d
+        and     0C0h
+        ld      b,a
         ld      a,h
         and     0C0h
-        cp      80h
-        ld      a,40h
-        jr      z,.w
+        ld      c,a
         ld      a,80h
+        cp      b
+        jr      z,.n2
+        cp      c
+        jr      nz,.w
+.n2:    ld      a,40h
+        cp      b
+        jr      z,.p0
+        cp      c
+        jr      nz,.w
+.p0:    xor     a
 .w:     ld      (wpg),a
-        push    hl
-        ld      h,40h
-        call    curslot
-        ld      (sv1),a
-        ld      h,80h
-        call    curslot
-        ld      (sv2),a
-        call    setbank                 ; -> HL = sector start in the window
-        ld      bc,(soff)
-        add     hl,bc
-        pop     de
-        pop     bc
-        push    bc
-        ldir
-        push    de
-        ld      a,(sv1)
-        ld      h,40h
-        call    enaslt
-        ld      a,(sv2)
-        ld      h,80h
-        call    enaslt
-        pop     hl
-        pop     bc
-        pop     de
-        ret
-
-; curslot: H = address -> A = slot id currently selected in that page. Keeps HL, DE.
-curslot: ld     a,h
-        rlca
-        rlca
-        and     3
-        ld      b,a
         in      a,(0A8h)
-        call    shr2b
-        and     3
-        ld      c,a
-        push    hl
-        ld      hl,EXPTBL
-        add     a,l
-        ld      l,a
-        ld      a,(hl)
-        and     80h
-        jr      z,.nx
+        ld      (sa8),a
+        push    de
+        call    setbank
+        pop     de
+        ld      bc,(scnt)
+        ld      a,b
         or      c
-        ld      c,a
-        ld      a,l
-        add     a,4
-        ld      l,a
-        ld      a,(hl)                  ; SLTTBL
-        call    shr2b
-        and     3
-        add     a,a
-        add     a,a
-        or      c
-        ld      c,a
-.nx:    ld      a,c
-        pop     hl
-        ret
-shr2b:  push    bc
-        inc     b
-        jr      .t
-.l:     rrca
-        rrca
-.t:     djnz    .l
-        pop     bc
+        jr      z,.z
+        ldir
+        jr      .done
+.z:     call    dzx0
+.done:  ld      a,(sa8)                 ; pages back as they were (only primary slots changed)
+        out     (0A8h),a
         ret
 
-; setbank: DE = ROM sector. Puts the cartridge in the window page (wpg) with the bank holding
-; the sector -> HL = address of the sector in the window.
+; xfer: copy BC bytes from ROM sector DE + (soff) to HL. Keeps BC, DE, HL.
+xfer:   push    de
+        push    bc
+        push    hl
+        ld      (scnt),bc
+        call    sec2b
+        pop     de
+        push    de
+        call    getsec
+        pop     hl
+        pop     bc
+        pop     de
+        ret
+
+; sec2b: DE = ROM sector, (soff) -> sbank (8KB bank), soffs (offset in it)
+sec2b:  ld      a,e
+        and     0Fh
+        add     a,a
+        ld      h,a
+        ld      l,0
+        push    de
+        ld      de,(soff)
+        add     hl,de
+        ld      (soffs),hl
+        pop     hl
+        ld      b,4
+.s:     srl     h
+        rr      l
+        djnz    .s
+        ld      (sbank),hl
+        ret
+
+; setbank: cartridge on the window page (wpg) with 8KB bank sbank -> HL = its byte soffs there
         IF MAPPER == 1
-; Yamanooto: 8KB banks, bank = sector/16 = raw + 4*OFFR. OFFR (7FFEh, ENAR=01h) is only
-; reachable in page 1; raw stays 0-3 so 9800h-9FFFh never turns into the SCC.
-setbank: push   de
-        ld      a,e
-        rlca
-        rlca
+; Yamanooto: bank = raw + 4*OFFR, OFFR (7FFEh, ENAR = 01h) only in page 1; raw 0-3 keeps 9800h-9FFFh off the SCC.
+; Window registers: 5000h (page 1), 9000h (page 2), 1000h (page 0 = mirror of 8000h-BFFFh).
+setbank: ld     hl,(sbank)
+        ld      a,l
         and     3
-        ld      b,a
-        ld      a,d
-        add     a,a
-        add     a,a
-        or      b
-        ld      b,a                     ; B = OFFR = sector/64
-        ld      a,e
-        rrca
-        rrca
-        rrca
-        rrca
-        and     3
-        ld      c,a                     ; C = raw bank
+        ld      c,a
+        srl     h
+        rr      l
+        srl     h
+        rr      l
+        ld      b,l
         push    bc
         ld      a,(cartsl)
         ld      h,40h
@@ -874,150 +1062,77 @@ setbank: push   de
         ld      (7FFFh),a
         ld      a,(wpg)
         cp      40h
-        jr      nz,.p2
-        ld      a,c
-        ld      (5000h),a
-        jr      .off
-.p2:    push    bc
-        ld      a,(sv1)
-        ld      h,40h
-        call    enaslt
+        ld      a,50h
+        jr      z,.reg
+        push    bc
+        ld      a,(sa8)
+        out     (0A8h),a
+        ld      a,(wpg)
+        ld      h,a
         ld      a,(cartsl)
-        ld      h,80h
         call    enaslt
         pop     bc
-        ld      a,c
-        ld      (9000h),a
-.off:   pop     de
-        ld      a,e
-        and     0Fh
-        add     a,a
-        ld      h,a
         ld      a,(wpg)
-        add     a,h
-        ld      h,a
+        add     a,10h
+.reg:   ld      h,a
         ld      l,0
+        ld      (hl),c
+        ld      a,(wpg)
+        ld      h,a
+        ld      de,(soffs)
+        add     hl,de
         ret
         ELSE
-; ASCII16-X: 16KB banks, 12-bit bank = address bits 8-11 + data, written anywhere in
-; 6000h-6FFFh/A000h-AFFFh (4000h window) or 7000h-7FFFh/B000h-BFFFh (8000h window).
-setbank: push   de
-        ld      a,e
-        rlca
-        rlca
-        rlca
-        and     7
-        ld      c,a
-        ld      a,d
-        add     a,a
-        add     a,a
-        add     a,a
-        or      c
-        ld      c,a                     ; C = bank bits 0-7
-        ld      a,d
-        rlca
-        rlca
-        rlca
-        and     7
-        ld      b,a                     ; B = bank bits 8-11
-        push    bc
+; ASCII16-X: 16KB banks, 12-bit bank = address bits 8-11 + data. Registers: 6000h (page 1), B000h (page 2),
+; 3000h (page 0 shows the second bank register, like page 2).
+setbank: ld     hl,(sbank)
+        srl     h
+        rr      l
+        push    hl
         ld      a,(wpg)
         ld      h,a
         ld      a,(cartsl)
         call    enaslt
         pop     bc
         ld      a,(wpg)
-        cp      40h
-        ld      a,60h
-        jr      z,.w1
-        ld      a,0B0h
-.w1:    or      b
+        rlca
+        rlca
+        ld      e,a
+        ld      d,0
+        ld      hl,a16reg
+        add     hl,de
+        ld      a,(hl)
+        or      b
         ld      h,a
         ld      l,0
         ld      (hl),c
-        pop     de
-        ld      a,e
-        and     1Fh
-        add     a,a
+        ld      a,(sbank)
+        and     1
+        rrca
+        rrca
+        rrca
         ld      h,a
         ld      a,(wpg)
         add     a,h
         ld      h,a
         ld      l,0
+        ld      de,(soffs)
+        add     hl,de
         ret
+a16reg: db      30h,60h,0B0h
         ENDIF
 
-; funmap: WREN off, pages 1 and 2 back. Keeps F.
-funmap: push    af
-        xor     a
-        call    wren
-        ld      a,(sv1)
-        ld      h,40h
-        call    enaslt
-        ld      a,(sv2)
-        ld      h,80h
-        call    enaslt
-        pop     af
-        ret
-; chsec: A = which (0/1), B = position, C = chunk 0-31 -> DE = ROM sector, (soff) = offset
-chsec:  rrca
-        ld      e,a
-        ld      a,b
-        call    possec
-        add     a,e
-        ld      e,a
-        ld      a,c
-        and     10h
-        rrca
-        rrca
-        rrca
-        rrca
-        add     a,e
-        ld      e,a
-        ld      a,(tgrp)
-        ld      d,a
-        ld      hl,SAVESEC
-        add     hl,de
-        ex      de,hl
-        ld      a,c
-        and     0Fh
-        ld      l,a
-        ld      h,0
-        add     hl,hl
-        add     hl,hl
-        add     hl,hl
-        add     hl,hl
-        add     hl,hl
-        ld      (soff),hl
-        ret
-; possec: A = position 0-23 -> A = its sector within the flash sector (bank*32 + (p mod 8)*2)
-possec: push    bc
-        ld      b,a
-        and     7
-        add     a,a
-        ld      c,a
-        ld      a,b
-        and     18h
-        add     a,a
-        add     a,a
-        add     a,c
-        pop     bc
-        ret
-; flget: B = position, C = chunk -> cbuf from the current sector
-flget:  ld      a,(wsw)
-        call    chsec
-        ld      hl,cbuf
-        ld      bc,32
-        jp      xfer
 cur:    db      1
 dta:    dw      0080h
 cartsl: db      0
 ramsl:  db      0
 wpg:    db      0
-sv1:    db      0
-sv2:    db      0
-left:   dw      0
+sa8:    db      0
 soff:   dw      0
+sbank:  dw      0
+soffs:  dw      0
+scnt:   dw      0
+tent:   ds      3
         ENT
 reslen  equ     $-resimg
         DISPLAY "env ",/D,envlen," res ",/D,reslen
@@ -1137,13 +1252,14 @@ wren:
         call    enaslt
         pop     af
         ld      (7FFFh),a
-        ld      a,(wpg)
-        cp      40h
-        jr      z,.p1
-        ld      a,(sv1)
-        ld      h,40h
-        call    enaslt
-.p1:    pop     bc
+        in      a,(0A8h)                ; page 1 back as it was
+        and     0F3h
+        ld      b,a
+        ld      a,(sa8)
+        and     0Ch
+        or      b
+        out     (0A8h),a
+        pop     bc
         pop     de
         pop     hl
         ENDIF
@@ -1314,13 +1430,6 @@ grp:    ld      c,0
         ld      a,b
         ld      (thalf),a
         ret
-; curgp: HL = curg + tgrp
-curgp:  ld      a,(tgrp)
-        ld      e,a
-        ld      d,0
-        ld      hl,curg
-        add     hl,de
-        ret
 page:   db      0
 pkey:   db      0
         ENT
@@ -1334,92 +1443,48 @@ uilen   equ     $-uiimg
 ; is at bank 3 (+60h sectors). The sector with the valid, newer header is current.
 x1img:
         DISP    X1BASE
-; romsec: DE = sector of the current disk -> DE = ROM sector. Keeps BC, HL.
-romsec: push    hl
+; gsecp: HL = gsec + tgrp
+gsecp:  ld      a,(tgrp)
+        ld      e,a
+        ld      d,0
+        ld      hl,gsec
+        add     hl,de
+        ret
+; curof: tgrp -> A = flash sector (0-8) of the group (the map is read at start, see scan)
+curof:  call    gsecp
+        ld      a,(hl)
+        ret
+; wsave: A = slot -> wslot, which runs from the cartridge ROM in page 1 (its first 16KB: the boot banks)
+; while the flash window is page 2 and the data page 3. NZ = flash timeout.
+wsave:  ld      c,a
+        in      a,(0A8h)
+        push    af
         push    bc
-        call    savslot
-        jr      c,.lin
-        call    grp
-        call    curof
-        rrca
-        ld      e,a
-        ld      a,(tpos)
-        call    possec
-        add     a,e
-        ld      e,a
-        ld      a,(thalf)
-        add     a,e
-        jr      .pair
-.lin:   ld      a,(cur)
-        ld      hl,DATASEC-1440
-        ld      bc,1440
-.mul:   add     hl,bc
-        dec     a
-        jr      nz,.mul
-        add     hl,de
-        ex      de,hl
-        jr      .out
-.pair:  ld      e,a                     ; DE = SAVESEC + tgrp*256 + E
-        ld      a,(tgrp)
-        ld      d,a
-        ld      hl,SAVESEC
-        add     hl,de
-        ex      de,hl
-.out:   pop     bc
-        pop     hl
-        ret
-; curof: tgrp -> A = current sector of the pair (0/1), cached in curg
-curof:  call    curgp
-        ld      a,(hl)
-        cp      2
-        ret     c
-        push    hl
+        ld      a,(cartsl)
+        ld      h,40h
+        call    enaslt
+        IF MAPPER == 1
+        ld      a,1                     ; OFFR = 0, then region 0/1 = banks 0/1
+        ld      (7FFFh),a
         xor     a
-        ld      de,hdrA
-        call    rdhdr
-        ld      a,1
-        ld      de,hdrB
-        call    rdhdr
-        ld      b,0
-        ld      hl,hdrB
-        call    hvalid
-        jr      nz,.done                ; B invalid: the first
-        inc     b
-        ld      hl,hdrA
-        call    hvalid
-        jr      nz,.done                ; only B valid
-        ld      hl,(hdrB+2)
-        ld      de,(hdrA+2)
-        or      a
-        sbc     hl,de
-        jr      z,.a
-        bit     7,h
-        jr      z,.done                 ; B newer
-.a:     ld      b,0
-.done:  ld      a,b
-        pop     hl
-        ld      (hl),a
-        ret
-; invcur: forget the cached current sector of tgrp. Z.
-invcur: call    curgp
-        ld      (hl),0FFh
+        ld      (7FFEh),a
+        ld      (7FFFh),a
+        ld      (5000h),a
+        inc     a
+        ld      (7000h),a
+        ELSE
         xor     a
+        ld      (6000h),a
+        ENDIF
+        pop     bc
+        ld      a,c
+        call    wslot
+        pop     bc
+        ld      a,b
+        out     (0A8h),a
         ret
-hvalid: ld      a,(hl)
-        cp      'I'
-        ret     nz
-        inc     hl
-        ld      a,(hl)
-        cp      'C'
-        ret
-; rdhdr: A = which, DE = 4-byte destination
-rdhdr:  push    de
-        call    hdrsec
-        pop     hl
-        ld      bc,0
-        ld      (soff),bc
-        ld      bc,4
-        jp      xfer
+dzx0:
+        INCLUDE "zx0/dzx0_standard.asm"   ; ZX0 decoder by Einar Saukas & Urusergi (BSD-3, zx0/LICENSE)
         ENT
 x1len   equ     $-x1img
         ASSERT  X1BASE+x1len <= X1END
@@ -1428,9 +1493,9 @@ x1len   equ     $-x1img
 x2img:
         DISP    X2BASE
 cbuf:   ds      32,0FFh
-hdrA:   ds      4,0
-hdrB:   ds      4,0
-curg:   ds      8,0FFh                  ; current sector of each group, FFh = not read yet
+hbuf:   ds      5,0
+gsec:   ds      8,0FFh                  ; flash sector of each group
+spare:  db      0FFh                    ; the free flash sector; FFh = map not read yet
         ENT
 x2len   equ     $-x2img
         ASSERT  X2BASE+x2len <= X2END
@@ -1442,19 +1507,11 @@ tgrp:   db      0
 tpos:   db      0
 thalf:  db      0
 wsw:    db      0
+wdst:   db      0
 wlim:   db      0
 wleft:  db      0
 wsrc:   dw      0
-hdrsec: rrca
-        add     a,60h
-        ld      e,a
-; pairde: E = sector within the pair -> DE = SAVESEC + tgrp*256 + E
-pairde: ld      a,(tgrp)
-        ld      d,a
-        ld      hl,SAVESEC
-        add     hl,de
-        ex      de,hl
-        ret
+tmpi:   db      0
         ENT
 x3len   equ     $-x3img
         ASSERT  X3BASE+x3len <= X3END

@@ -3,7 +3,7 @@
  * Inputs (Uint8Array): the eight game disks (identified by the IPROJ0n label), an optional user disk,
  * an optional font (KANJI.rom layout), DOS system files.  Output: a file list and a FAT12 hard-disk image
  * (or a zip of the same files).  No data of the game is embedded; only the launcher and a boot sector are.
- * buildCart: the cartridge ROMs (Yamanooto / ASCII16-X, 8MB each), port of hdtool/cart/mkcart.py; the page carries
+ * buildCart: the cartridge ROMs (Yamanooto / ASCII16-X, 4MB each), port of hdtool/cart/mkcart.py; the page carries
  * only the cartridge's own 16KB boot block per mapper, FRAY.DOS comes from the given disk 1.
  */
 (function (root) {
@@ -214,6 +214,84 @@
   }
   function flatten(nodes, prefix, out) { out = out || []; for (const n of nodes) { if (n.dir) flatten(n.dir, prefix + n.name + '/', out); else out.push({ path: prefix + n.name, data: n.data }); } return out; }
 
+  /* ---------------------------------------------------------------- ZX0 compressor (port of ZX0 v2.2 by Einar Saukas,
+     BSD-3, src/optimize.c + src/compress.c; forward, modern format; output identical to the C tool) */
+  function zx0(input) {
+    const size = input.length, INITIAL_OFFSET = 1, MAX_OFFSET = 32640;
+    const egb = v => { let b = 1; while (v >>= 1) b += 2; return b; };
+    const ceil = i => i > MAX_OFFSET ? MAX_OFFSET : i < INITIAL_OFFSET ? INITIAL_OFFSET : i;
+    let maxOff = ceil(size - 1);
+    const lastLit = new Array(maxOff + 1).fill(null), lastMatch = new Array(maxOff + 1).fill(null);
+    const optimal = new Array(size).fill(null), matchLen = new Int32Array(maxOff + 1), best = new Int32Array(size + 1);
+    if (size > 2) best[2] = 2;
+    const blk = (bits, index, offset, chain) => ({ bits, index, offset, chain });
+    lastMatch[INITIAL_OFFSET] = blk(-1, -1, INITIAL_OFFSET, null);
+    for (let index = 0; index < size; index++) {
+      let bestSize = 2;
+      maxOff = ceil(index);
+      for (let offset = 1; offset <= maxOff; offset++) {
+        if (index !== 0 && index >= offset && input[index] === input[index - offset]) {
+          if (lastLit[offset]) {
+            const length = index - lastLit[offset].index, bits = lastLit[offset].bits + 1 + egb(length);
+            lastMatch[offset] = blk(bits, index, offset, lastLit[offset]);
+            if (!optimal[index] || optimal[index].bits > bits) optimal[index] = lastMatch[offset];
+          }
+          if (++matchLen[offset] > 1) {
+            if (bestSize < matchLen[offset]) {
+              let bits = optimal[index - best[bestSize]].bits + egb(best[bestSize] - 1);
+              do {
+                bestSize++;
+                const bits2 = optimal[index - bestSize].bits + egb(bestSize - 1);
+                if (bits2 <= bits) { best[bestSize] = bestSize; bits = bits2; } else best[bestSize] = best[bestSize - 1];
+              } while (bestSize < matchLen[offset]);
+            }
+            const length = best[matchLen[offset]];
+            const bits = optimal[index - length].bits + 8 + egb(Math.floor((offset - 1) / 128) + 1) + egb(length - 1);
+            if (!lastMatch[offset] || lastMatch[offset].index !== index || lastMatch[offset].bits > bits) {
+              lastMatch[offset] = blk(bits, index, offset, optimal[index - length]);
+              if (!optimal[index] || optimal[index].bits > bits) optimal[index] = lastMatch[offset];
+            }
+          }
+        } else {
+          matchLen[offset] = 0;
+          if (lastMatch[offset]) {
+            const length = index - lastMatch[offset].index, bits = lastMatch[offset].bits + 1 + egb(length) + length * 8;
+            lastLit[offset] = blk(bits, index, 0, lastMatch[offset]);
+            if (!optimal[index] || optimal[index].bits > bits) optimal[index] = lastLit[offset];
+          }
+        }
+      }
+    }
+    // emit
+    let opt = optimal[size - 1];
+    const out = new Uint8Array(Math.floor((opt.bits + 25) / 8));
+    let prev = null;
+    while (opt) { const next = opt.chain; opt.chain = prev; prev = opt; opt = next; }
+    let oi = 0, ii = 0, bitIndex = 0, bitMask = 0, backtrack = true, lastOffset = INITIAL_OFFSET;
+    const wbyte = v => { out[oi++] = v; };
+    const wbit = v => {
+      if (backtrack) { if (v) out[oi - 1] |= 1; backtrack = false; }
+      else { if (!bitMask) { bitMask = 128; bitIndex = oi; wbyte(0); } if (v) out[bitIndex] |= bitMask; bitMask >>= 1; }
+    };
+    const gamma = (value, invert) => {
+      let i = 2; while (i <= value) i <<= 1; i >>= 1;
+      while (i >>= 1) { wbit(0); wbit(invert ? !(value & i) : (value & i)); }
+      wbit(1);
+    };
+    for (opt = prev.chain; opt; prev = opt, opt = opt.chain) {
+      const length = opt.index - prev.index;
+      if (!opt.offset) { wbit(0); gamma(length, false); for (let i = 0; i < length; i++) wbyte(input[ii++]); }
+      else if (opt.offset === lastOffset) { wbit(0); gamma(length, false); ii += length; }
+      else {
+        wbit(1); gamma(Math.floor((opt.offset - 1) / 128) + 1, true);
+        wbyte((127 - (opt.offset - 1) % 128) << 1);
+        backtrack = true; gamma(length - 1, false); ii += length; lastOffset = opt.offset;
+      }
+    }
+    wbit(1); gamma(256, true);
+    return out;
+  }
+
   /* ---------------------------------------------------------------- cartridge ROMs (hdtool/cart/mkcart.py) */
   /* root-directory file of a FAT12 disk image */
   function fat12File(disk, name) {
@@ -257,24 +335,45 @@
       disks[0].set(hexBytes(p.new), q);
     }
     log('FRAY.DOS ' + fray.length + ' bytes, patches G1 + save-list paging (' + C.ui.length + ') applied');
+    // sectors of disk 1-8 + user disk: duplicates once, each ZX0 (raw when not smaller), none across an 8KB bank;
+    // table: low word at tblLo + 2i, high byte at tblHi + i (offset | raw<<13 | bank<<14)
+    const all = [...disks, user], nsec = 9 * DISK_SECTORS;
+    const blob = new Uint8Array(C.dataEnd - C.data).fill(0xFF), lo = new Uint8Array(2 * nsec), hi = new Uint8Array(nsec);
+    const where = new Map(); let used = 0;
+    const dec = new TextDecoder('latin1');
+    for (let i = 0; i < nsec; i++) {
+      const d = all[Math.floor(i / DISK_SECTORS)], s = d.subarray((i % DISK_SECTORS) * SEC, (i % DISK_SECTORS + 1) * SEC);
+      const key = dec.decode(s);
+      let w = where.get(key);
+      if (!w) {
+        const z = zx0(s), raw = z.length >= SEC, item = raw ? s : z;
+        if ((used & 0x1FFF) + item.length > 0x2000) used = (used | 0x1FFF) + 1;
+        if (used + item.length > blob.length) throw new Error('packed data does not fit');
+        w = { bank: (C.data + used) >> 13, off: used & 0x1FFF, raw };
+        blob.set(item, used); used += item.length; where.set(key, w);
+      }
+      const v = w.off | (w.raw ? 0x2000 : 0) | (w.bank << 14);
+      lo[2 * i] = v & 0xFF; lo[2 * i + 1] = (v >> 8) & 0xFF; hi[i] = v >> 16;
+    }
+    log(nsec + ' sectors (' + where.size + ' distinct) packed to ' + Math.round(used / 1024) + 'KB');
     const out = [];
     for (const m of C.mappers) {
       const rom = new Uint8Array(C.romSize).fill(0xFF);
       rom.set(b64(m.boot), 0);
       rom.set(fray, m.frayOff);
-      disks.forEach((d, i) => rom.set(d, C.data + i * DISK_BYTES));
-      rom.set(user, C.data + 8 * DISK_BYTES);
+      rom.set(lo, C.tblLo); rom.set(hi, C.tblHi);
+      rom.set(blob.subarray(0, used), C.data);
       rom.set(cls.font.data, C.font);
-      // save slots: groups of C.group in flash sector pairs, first sector current (header 'IC', generation 1)
-      for (let g = 0; g < 2 * C.slots / C.group; g++) rom.set([0x49, 0x43, 1, 0], C.save + g * 0x20000 + 0xC000);
+      // save slots: group g in flash sector g (header 'IC', g, generation 1), sector nsave-1 spare
+      for (let g = 0; g < 2 * C.slots / C.group; g++) rom.set([0x49, 0x43, g, 1, 0], C.save + g * 0x10000 + 0xC000);
       [disks[0], user].forEach((d, area) => { for (let n = 0; n < 8; n++) {
         const slot = area * C.slots + n, g = Math.floor(slot / C.group), p = slot % C.group, src = (C.saveFirst + 2 * n) * SEC;
-        rom.set(d.subarray(src, src + 2 * SEC), C.save + g * 0x20000 + (p >> 3) * 0x4000 + (p & 7) * 0x400); } });
+        rom.set(d.subarray(src, src + 2 * SEC), C.save + g * 0x10000 + (p >> 3) * 0x4000 + (p & 7) * 0x400); } });
       out.push({ tag: m.tag, name: m.name, rom });
     }
     log('ROM: ' + out.map(r => r.name).join(', ') + ' (' + (C.romSize >> 20) + 'MB each)');
     return out;
   }
 
-  root.ICITY = { classify, build, buildCart, fat12File, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
+  root.ICITY = { classify, build, buildCart, fat12File, zx0, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
 })(typeof window !== 'undefined' ? window : globalThis);

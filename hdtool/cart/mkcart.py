@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mkcart.py - build the Illusion City cartridge ROMs (Yamanooto and ASCII16-X, 8MB each).
+"""mkcart.py - build the Illusion City cartridge ROMs (Yamanooto and ASCII16-X, 4MB each: fit any flash of 4MB or more).
 
 usage: mkcart.py <disks> <userdisk.dsk> <font> [outdir]
   <disks>: one 5898240-byte image of disks 1-8 back to back,
@@ -9,14 +9,20 @@ usage: mkcart.py <disks> <userdisk.dsk> <font> [outdir]
 
 ROM layout (both mappers):
   000000h  boot code, page-3 environment, FRAY.DOS (cart.asm, 16KB)
-  010000h  disk 1 .. disk 8, user disk (9 x 720KB, sector s of disk d at 10000h + ((d-1)*1440+s)*512)
-  664000h  font (256KB, cart.asm FONTSEC)
-  6B0000h  save slots (cart.asm SAVESEC): 96 per disk (disk 1 = 0-95, user disk = 96-191) in 8 groups of 24;
-           group g = the flash sector pair 6B0000h + g*128KB (+64KB). Slot position p of a group is the 1KB at
-           (p/8)*16KB + (p mod 8)*1KB, header 'IC' + 16-bit generation at +C000h; the valid, newer one is current.
-           The disks' own 8 slots each (sectors 0578h+2n) start in the first sector with generation 1.
-  7B0000h  0FFh up to 8MB
+  004000h  sector table low words (cart.asm TBLLO), 00A600h high bytes (TBLHI), per sector of disk 1 .. 8, user disk
+           (index (d-1)*1440+s): 24-bit value, bits 0-12 offset in its 8KB bank, bit 13 = stored raw (else ZX0),
+           bits 14-23 = 8KB bank (split in two arrays so that no entry crosses a 512-byte sector)
+  010000h  the sectors, duplicates stored once, ZX0-compressed each (raw when that is not smaller); no sector
+           crosses an 8KB bank. Compressor: ZX0 v2.2 by Einar Saukas (zx0/src, BSD-3), built here with cc on first
+           use (the web app has a byte-identical port). Results are cached in ~/.cache/icity_zx0.
+  310000h  font (256KB, cart.asm FONTSEC)
+  350000h  save slots (cart.asm SAVESEC): 96 per disk (disk 1 = 0-95, user disk = 96-191) in 8 groups of 24 slots
+           in 9 flash sectors of 64KB (one spare). Slot position p of a group is the 1KB at (p/8)*16KB + (p mod 8)*1KB,
+           header 'IC', group, 16-bit generation at +C000h; per group the valid, newer header wins, the sector
+           without one is the spare. The disks' own 8 slots each (sectors 0578h+2n) start in groups 0 and 4.
+  3E0000h  0FFh up to 4MB
 """
+import hashlib
 import os
 import shutil
 import struct
@@ -27,27 +33,90 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 SJASM = os.path.join(HERE, 'sjasmplus')
 DISK = 737280
-ROMSIZE = 8 << 20
+ROMSIZE = 4 << 20
+TBLLO = 0x4000          # cart.asm TBLLO
+TBLHI = 0xA600          # cart.asm TBLHI
 DATA = 0x10000
-FONT = 0x664000
-SAVE = 0x6B0000         # cart.asm SAVESEC
+DATAEND = 0x310000
+FONT = 0x310000         # cart.asm FONTSEC
+SAVE = 0x350000         # cart.asm SAVESEC
 SAVEFIRST = 0x578
 SLOTS = 96              # per disk (cart.asm PAGES * 8)
-GROUP = 24              # slots per flash sector pair
+GROUP = 24              # slots per group (one 64KB flash sector)
+NSAVE = 9               # flash sectors for the 8 groups + 1 spare
 
 
 def save_layout(disk1, user):
-    """{ROM offset: bytes} of the save area: the 8 slots each disk has, in group pairs, first sector current."""
+    """{ROM offset: bytes} of the save area: group g in flash sector g (generation 1), sector 8 spare (erased)."""
     out = {}
     for g in range(2 * SLOTS // GROUP):
-        out[SAVE + g * 0x20000 + 0xC000] = b'IC\x01\x00'          # header of the first sector, generation 1
+        out[SAVE + g * 0x10000 + 0xC000] = b'IC' + bytes([g]) + b'\x01\x00'
     for area, disk in enumerate((disk1, user)):
         for n in range(8):
             slot = area * SLOTS + n
             g, p = divmod(slot, GROUP)
             src = (SAVEFIRST + 2 * n) * 512
-            out[SAVE + g * 0x20000 + (p >> 3) * 0x4000 + (p & 7) * 0x400] = disk[src:src + 1024]
+            out[SAVE + g * 0x10000 + (p >> 3) * 0x4000 + (p & 7) * 0x400] = disk[src:src + 1024]
     return out
+
+
+def zx0tool():
+    """The ZX0 reference compressor, built from zx0/src into ~/.cache/icity_zx0 (or ZX0=path)."""
+    if os.environ.get('ZX0'):
+        return os.environ['ZX0']
+    cache = os.path.join(os.path.expanduser('~'), '.cache', 'icity_zx0')
+    os.makedirs(cache, exist_ok=True)
+    exe = os.path.join(cache, 'zx0')
+    if not os.path.exists(exe):
+        src = os.path.join(HERE, 'zx0', 'src')
+        r = subprocess.run([os.environ.get('CC', 'cc'), '-O2', '-o', exe] +
+                           [os.path.join(src, f) for f in ('zx0.c', 'optimize.c', 'compress.c', 'memory.c')],
+                           capture_output=True, text=True)
+        if r.returncode:
+            sys.exit('building zx0 failed (needs a C compiler, or ZX0=/path/to/zx0):\n' + r.stderr)
+    return exe
+
+
+def zx0(block, tool, cache):
+    """ZX0 of one 512-byte sector (cached by content)."""
+    h = hashlib.sha1(block).hexdigest()
+    path = os.path.join(cache, h)
+    if not os.path.exists(path):
+        with tempfile.TemporaryDirectory() as t:
+            src, dst = os.path.join(t, 'in'), os.path.join(t, 'out')
+            open(src, 'wb').write(block)
+            subprocess.run([tool, '-f', src, dst], check=True, capture_output=True)
+            os.replace(dst, path)
+    return open(path, 'rb').read()
+
+
+def pack(data):
+    """data = 9 disks back to back -> (table bytes, packed bytes placed at DATA)."""
+    tool = zx0tool()
+    cache = os.path.join(os.path.expanduser('~'), '.cache', 'icity_zx0', 'v22')
+    os.makedirs(cache, exist_ok=True)
+    blob = bytearray()
+    where = {}
+    lo = bytearray()
+    hi = bytearray()
+    for i in range(len(data) // 512):
+        sec = data[i * 512:(i + 1) * 512]
+        if sec not in where:
+            c = zx0(sec, tool, cache)
+            raw = len(c) >= 512
+            item = sec if raw else c
+            if (len(blob) & 0x1FFF) + len(item) > 0x2000:       # never across an 8KB bank
+                blob += b'\xff' * (0x2000 - (len(blob) & 0x1FFF))
+            where[sec] = ((DATA + len(blob)) >> 13, len(blob) & 0x1FFF, raw)
+            blob += item
+        bank, off, raw = where[sec]
+        v = off | (0x2000 if raw else 0) | (bank << 14)
+        lo += bytes([v & 0xFF, (v >> 8) & 0xFF])
+        hi.append(v >> 16)
+    if DATA + len(blob) > DATAEND:
+        sys.exit(f'packed data too big: {len(blob)} bytes')
+    assert TBLLO + len(lo) <= TBLHI and TBLHI + len(hi) <= DATA
+    return bytes(lo), bytes(hi), bytes(blob), len(where)
 FONTSIZE = 0x40000
 MAPPERS = {1: 'YAMA', 2: 'A16X'}
 # G1: disk 1 sector 102 (file7 2AB9h), the game's only Kanji-ROM access (28 bytes) -> JP E947h (cart.asm glyph).
@@ -131,6 +200,8 @@ def patch_g1(disk1):
 
 def assemble(mapper, fray, tmp):
     shutil.copy(os.path.join(HERE, 'cart.asm'), tmp)
+    os.makedirs(os.path.join(tmp, 'zx0'), exist_ok=True)
+    shutil.copy(os.path.join(HERE, 'zx0', 'dzx0_standard.asm'), os.path.join(tmp, 'zx0'))
     with open(os.path.join(tmp, 'fray.dos'), 'wb') as f:
         f.write(fray)
     r = subprocess.run([SJASM, f'-DMAPPER={mapper}', '--nologo', '--msg=war',
@@ -170,12 +241,16 @@ def main():
         assert all(u == ui[0] for u in ui), 'page-3 UI addresses differ between mappers'
         disks[0] = patch_ui(disks[0], syms[1])
         data = b''.join(disks) + user
-        assert DATA + len(data) <= FONT
+        if os.environ.get('DUMP_DATA'):                  # tests: the disks as the ROM serves them (patched)
+            open(os.environ['DUMP_DATA'], 'wb').write(data)
+        tlo, thi, blob, nuniq = pack(data)
         for mapper, tag in MAPPERS.items():
             boot = boots[mapper]
             rom = bytearray(b'\xff' * ROMSIZE)
             rom[0:len(boot)] = boot
-            rom[DATA:DATA + len(data)] = data
+            rom[TBLLO:TBLLO + len(tlo)] = tlo
+            rom[TBLHI:TBLHI + len(thi)] = thi
+            rom[DATA:DATA + len(blob)] = blob
             rom[FONT:FONT + FONTSIZE] = font
             for off, b in save_layout(disks[0], user).items():
                 rom[off:off + len(b)] = b
@@ -183,7 +258,8 @@ def main():
             with open(out, 'wb') as f:
                 f.write(rom)
             shutil.copy(os.path.join(tmp, f'cart_{tag}.lst'), outdir)
-            print(f'{out}: FRAY.DOS {len(fray)} bytes, data {DATA:06X}-{DATA + len(data):06X}')
+            print(f'{out}: FRAY.DOS {len(fray)} bytes, {len(data) // 512} sectors ({nuniq} distinct) packed '
+                  f'{DATA:06X}-{DATA + len(blob):06X}')
 
 
 if __name__ == '__main__':
