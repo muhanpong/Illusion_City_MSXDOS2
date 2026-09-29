@@ -12,7 +12,8 @@ import mkcart
 FRAYLEN = 3234          # FRAY.DOS of the supported release (disk 1)
 
 out = {'frayLen': FRAYLEN, 'data': mkcart.DATA, 'font': mkcart.FONT, 'fontSize': mkcart.FONTSIZE,
-       'save': mkcart.SAVE, 'saveSlot': mkcart.SAVESLOT, 'saveFirst': mkcart.SAVEFIRST, 'romSize': mkcart.ROMSIZE,
+       'save': mkcart.SAVE, 'saveFirst': mkcart.SAVEFIRST, 'slots': mkcart.SLOTS, 'group': mkcart.GROUP,
+       'romSize': mkcart.ROMSIZE, 'file9Sec': mkcart.FILE9_SEC, 'file9Base': mkcart.FILE9_BASE,
        'g1': {'sector': mkcart.G1_SEC, 'offset': mkcart.G1_OFF, 'orig': [o.hex() for o in mkcart.G1_ORIG], 'new': mkcart.G1_NEW.hex()},
        'mappers': []}
 with tempfile.TemporaryDirectory() as tmp:
@@ -27,6 +28,9 @@ with tempfile.TemporaryDirectory() as tmp:
         assert len(boot) == 0x4000
         sym = open(os.path.join(tmp, 'cart.sym')).read()
         fray = int(re.search(r'^fray:\s+EQU\s+0x([0-9A-Fa-f]+)', sym, re.M).group(1), 16) - 0x4000
+        syms = {m.group(1): int(m.group(2), 16) for m in re.finditer(r'^(\w+):\s+EQU\s+0x([0-9A-Fa-f]+)', sym, re.M)}
+        ui = [{'addr': a, 'orig': o.hex(), 'new': n.hex()} for a, (o, n) in sorted(mkcart.ui_patches(syms).items())]
+        assert out.setdefault('ui', ui) == ui, 'page-3 UI addresses differ between mappers'
         assert boot[fray:fray + FRAYLEN] == bytes(FRAYLEN)
         out['mappers'].append({'tag': tag, 'name': {'YAMA': 'Yamanooto', 'A16X': 'ASCII16-X'}[tag],
                                'boot': base64.b64encode(boot).decode(), 'frayOff': fray})
