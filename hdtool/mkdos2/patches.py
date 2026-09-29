@@ -102,6 +102,17 @@ def get_patches(midi, font=False):
         # M3: file13 40AC: index for the init data.  The init entry (014Ah, 8 sectors) sits 8 sectors before
         #     song 0 (0152h) on disk, so start the index 8 lower (0248h -> sector 014Ah).
         pl.append(P("M3", file13(0x40AC), bytes.fromhex("115002"), bytes.fromhex("114802")))
+    # P1-P6: file9 (disk 1 sectors 156.., memory 4000h) save-list paging -> icity.asm cbk/fixno/fixsel/newlist/secof
+    #        (96 slots per disk, left/right pages; addresses checked by ASSERTs in icity.asm)
+    w = lambda a: bytes([a & 0xFF, a >> 8])
+    f9 = lambda a: (156 + (a - 0x4000) // 512, (a - 0x4000) % 512)
+    CBK, FIXNO, FIXSEL, NEWLIST, SECOF = 0xE9AA, 0xE9F7, 0x00F6, 0xE9EA, 0xE9DB
+    pl.append(P("P1", f9(0x590A), bytes.fromhex("210000"), b"\x21" + w(CBK)))
+    pl.append(P("P2", f9(0x5957), bytes.fromhex("326ad5"), b"\xcd" + w(FIXNO)))
+    pl.append(P("P3", f9(0x5910), bytes.fromhex("32c55e"), b"\xcd" + w(FIXSEL)))
+    pl.append(P("P4", f9(0x58E3), bytes.fromhex("cd4459"), b"\xcd" + w(NEWLIST)))
+    pl.append(P("P5", f9(0x5A66), bytes.fromhex("2178051919"), b"\xcd" + w(SECOF) + bytes(2)))
+    pl.append(P("P6", f9(0x5A8F), bytes.fromhex("2178051919"), b"\xcd" + w(SECOF) + bytes(2)))
     if font:
         # G1: file7 2AB9h (memory address = file offset + 0100h), the game's only Kanji-ROM access, 28 bytes:
         #     LD A,L / ADD HL,HL / ADD HL,HL / LD L,A / BIT 6,H / JR NZ / LD C,D9 / JR / LD C,DB /

@@ -8,7 +8,7 @@ usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch] [--fm-only] [--fo
 
     <out>/ICITY/D1/D1_0000.DAT ...    game disk n, chunk starting at sector 0000h
     <out>/ICITY/DU/DU_0000.DAT ...    user disk
-    <out>/ICITY/SAVE/D1_0578.DAT      save slots (disk 1), DU_0578.DAT (user disk)
+    <out>/ICITY/SAVE/D1_0578.DAT      save slots (disk 1), DU_0578.DAT (user disk): 96 slots of 1KB each
     <out>/chunks.inc                  sjasmplus include: per-disk sorted start-sector tables
     <out>/manifest.json               everything the tool knows (ranges, chunks, patches)
 
@@ -32,6 +32,7 @@ from patches import get_patches
 SEC = 512
 DISK_SECTORS = 1440
 SAVE_START, SAVE_LEN = 0x578, 0x10
+SAVE_FILE = 96 * 1024          # save files: 96 slots of 1KB (icity.asm SLOTS), the disk's 8 first
 SYS_LEN = 14                      # boot sector, FAT, directory (sector 11 = file table)
 
 def find_disk(d, n):
@@ -163,7 +164,10 @@ def main():
             name = f"{tag}_{a:04X}.DAT"
             sub = "SAVE" if (a == SAVE_START and n in ("1", "U")) else tag
             path = os.path.join(out, "ICITY", sub, name)
-            with open(path, "wb") as f: f.write(img[a*SEC:b*SEC])
+            data = img[a*SEC:b*SEC]
+            if sub == "SAVE":
+                data += bytes(SAVE_FILE - len(data))   # 96 slots (paged slot list, patches P1-P6)
+            with open(path, "wb") as f: f.write(data)
             files.append({"start": a, "end": b, "file": f"ICITY\\{sub}\\{name}"})
         total_chunks += len(chunks)
         nz = sum(1 for s in range(DISK_SECTORS) if any(img[s*SEC:(s+1)*SEC]))
@@ -196,7 +200,8 @@ def main():
         orig = open(find_disk(src, n), "rb").read()
         re_img = bytearray()
         for c in manifest["disks"][tag]["chunks"]:
-            re_img += open(os.path.join(out, c["file"].replace("\\", os.sep)), "rb").read()
+            part = open(os.path.join(out, c["file"].replace("\\", os.sep)), "rb").read()
+            re_img += part[:(c["end"] - c["start"]) * SEC]     # save files carry extra slots after the disk's own
         assert len(re_img) == len(orig), tag
         mask = bytearray(orig)
         for pt in manifest["patches"]:
