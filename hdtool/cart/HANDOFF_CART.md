@@ -17,6 +17,8 @@ DOS2판(`hdtool/mkdos2`, 배포 zip, 웹앱)은 완료 상태이며 이 작업�
   같은 기계에서 유저 디스크 세이브 8 로드 → 디스크 6: 125회 읽기 불일치 0.
 - 실기 미확인.
 
+웹 도구(`hdtool/webapp/icity_dsk_maker.html`)의 "만들 것 = 카트리지 ROM"도 같은 ROM을 만든다(바이트 일치, `test_cart.js`).
+`cart.asm`/`mkcart.py`를 고치면 `webapp/make_cart_assets.py` → `build_app.py`로 페이지를 다시 만들 것.
 빌드: `python3 mkcart.py <디스크 8장 폴더 또는 5.9MB 합본> <유저디스크.dsk> <FONT.BIN> [출력 폴더]` (글꼴: 저장소 루트 `KANJI.rom`, 262144바이트)
 (`sjasmplus`는 같은 폴더의 것을 쓴다). 시험: `test/verify.tcl` 머리말 참고.
 

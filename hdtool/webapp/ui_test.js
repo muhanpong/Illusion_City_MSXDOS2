@@ -1,7 +1,8 @@
-// needs `npm i jsdom`; run: node ui_test.js icity_dsk_maker.html <zip> <userdisk> <KANJI.rom> <sys dir> <out dir>
+// needs `npm i jsdom`; run: node ui_test.js icity_dsk_maker.html <zip> <userdisk> <KANJI.rom> <sys dir> <out dir> [cart]
+// (cart: choose "카트리지 ROM" and download both ROMs instead of the DSK/ZIP)
 // Runs the real page (icity_dsk_maker.html) in jsdom: drops the input files, presses the buttons, saves the downloads.
 const { JSDOM } = require('jsdom'); const fs = require('fs'), zlib = require('zlib');
-const [html, zipf, userf, fontf, sysdir, outdir] = process.argv.slice(2);
+const [html, zipf, userf, fontf, sysdir, outdir, mode] = process.argv.slice(2);
 (async () => {
   const dom = new JSDOM(fs.readFileSync(html, 'utf8'), { runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/' });
   const w = dom.window;
@@ -25,14 +26,18 @@ const [html, zipf, userf, fontf, sysdir, outdir] = process.argv.slice(2);
   const chips = Array.from(d.querySelectorAll('.chip')).map(c => c.textContent.replace(/\s+/g, ' '));
   console.log('chips:', chips.join(' | '));
   console.log('make disabled:', d.getElementById('make').disabled, 'dos row hidden:', d.getElementById('dosRow').hidden);
-  // options: autoexec on
-  d.querySelector('.seg[data-opt="autoexec"] button[data-v="on"]').click();
+  if (mode === 'cart') {
+    d.querySelector('.seg[data-opt="target"] button[data-v="cart"]').click();
+    await new Promise(r => setTimeout(r, 1500));
+    console.log('cart mode: dsk-only rows hidden:', Array.from(d.querySelectorAll('.dsk-only')).every(r => r.hidden), 'rom buttons shown:', !d.getElementById('dlYAMA').hidden && !d.getElementById('dlA16X').hidden, 'make disabled:', d.getElementById('make').disabled);
+  } else d.querySelector('.seg[data-opt="autoexec"] button[data-v="on"]').click(); // options: autoexec on
   d.getElementById('make').click();
   await new Promise(r => setTimeout(r, 4000));
   console.log('msg:', d.getElementById('msg').textContent);
   console.log('log:', d.getElementById('log').textContent.trim().split('\n').join(' / '));
-  console.log('dl buttons enabled:', !d.getElementById('dlDsk').disabled, !d.getElementById('dlZip').disabled);
-  d.getElementById('dlDsk').click(); d.getElementById('dlZip').click();
+  const dl = mode === 'cart' ? ['dlYAMA', 'dlA16X'] : ['dlDsk', 'dlZip'];
+  console.log('dl buttons enabled:', dl.map(id => !d.getElementById(id).disabled).join(' '));
+  for (const id of dl) d.getElementById(id).click();
   await new Promise(r => setTimeout(r, 300));
   for (const k of Object.keys(saved)) if (k.startsWith('dl:')) { const blob = saved[k]; const buf = Buffer.from(await blob.arrayBuffer()); const fn = outdir + '/' + k.slice(3); fs.writeFileSync(fn, buf); console.log('saved', fn, buf.length); }
   process.exit(0);
