@@ -11,9 +11,10 @@ ROM layout (both mappers):
   000000h  boot code, page-3 environment, FRAY.DOS (cart.asm, 16KB)
   010000h  disk 1 .. disk 8, user disk (9 x 720KB, sector s of disk d at 10000h + ((d-1)*1440+s)*512)
   664000h  font (256KB, cart.asm FONTSEC)
-  6B0000h  save slots (cart.asm SAVESEC): 16 flash sectors of 64KB, slot n of disk 1 = n, of the user disk = 8+n;
-           each holds the slot's 2 sectors (0578h+2n) in its first 1KB, the rest 0FFh. Reads and writes of those
-           sectors go here; a save erases and reprograms the slot's flash sector.
+  6B0000h  save slots (cart.asm SAVESEC): 96 per disk (disk 1 = 0-95, user disk = 96-191) in 8 groups of 24;
+           group g = the flash sector pair 6B0000h + g*128KB (+64KB). Slot position p of a group is the 1KB at
+           (p/8)*16KB + (p mod 8)*1KB, header 'IC' + 16-bit generation at +C000h; the valid, newer one is current.
+           The disks' own 8 slots each (sectors 0578h+2n) start in the first sector with generation 1.
   7B0000h  0FFh up to 8MB
 """
 import os
@@ -29,9 +30,24 @@ DISK = 737280
 ROMSIZE = 8 << 20
 DATA = 0x10000
 FONT = 0x664000
-SAVE = 0x6B0000
-SAVESLOT = 0x10000
+SAVE = 0x6B0000         # cart.asm SAVESEC
 SAVEFIRST = 0x578
+SLOTS = 96              # per disk (cart.asm PAGES * 8)
+GROUP = 24              # slots per flash sector pair
+
+
+def save_layout(disk1, user):
+    """{ROM offset: bytes} of the save area: the 8 slots each disk has, in group pairs, first sector current."""
+    out = {}
+    for g in range(2 * SLOTS // GROUP):
+        out[SAVE + g * 0x20000 + 0xC000] = b'IC\x01\x00'          # header of the first sector, generation 1
+    for area, disk in enumerate((disk1, user)):
+        for n in range(8):
+            slot = area * SLOTS + n
+            g, p = divmod(slot, GROUP)
+            src = (SAVEFIRST + 2 * n) * 512
+            out[SAVE + g * 0x20000 + (p >> 3) * 0x4000 + (p & 7) * 0x400] = disk[src:src + 1024]
+    return out
 FONTSIZE = 0x40000
 MAPPERS = {1: 'YAMA', 2: 'A16X'}
 # G1: disk 1 sector 102 (file7 2AB9h), the game's only Kanji-ROM access (28 bytes) -> JP E947h (cart.asm glyph).
@@ -80,6 +96,32 @@ def fat12_file(disk, name):
     sys.exit(f'{name!r} not found on disk 1')
 
 
+# Save-list paging (cart.asm uiimg), in file9 (disk 1 sectors 156.., loaded at 4000h). addr: (original, new)
+FILE9_SEC, FILE9_BASE = 156, 0x4000
+
+
+def ui_patches(sym):
+    w = lambda a: bytes([a & 0xFF, a >> 8])
+    return {
+        0x590A: (bytes.fromhex('210000'), b'\x21' + w(sym['cbk'])),        # P1 menu callback
+        0x5957: (bytes.fromhex('326ad5'), b'\xcd' + w(sym['fixno'])),      # P2 number shown
+        0x5910: (bytes.fromhex('32c55e'), b'\xcd' + w(sym['fixsel'])),     # P3 slot selected
+        0x58E3: (bytes.fromhex('cd4459'), b'\xcd' + w(sym['newlist'])),    # P4 list opened
+        0x5A66: (bytes.fromhex('2178051919'), b'\xcd' + w(sym['secof']) + bytes(2)),   # P5 read sector
+        0x5A8F: (bytes.fromhex('2178051919'), b'\xcd' + w(sym['secof']) + bytes(2)),   # P6 write sector
+    }
+
+
+def patch_ui(disk1, sym):
+    d = bytearray(disk1)
+    for addr, (orig, new) in ui_patches(sym).items():
+        o = FILE9_SEC * 512 + addr - FILE9_BASE
+        if d[o:o + len(orig)] != orig:
+            sys.exit(f'disk 1: unexpected bytes at file9 {addr:04X}: {d[o:o + len(orig)].hex()}')
+        d[o:o + len(new)] = new
+    return bytes(d)
+
+
 def patch_g1(disk1):
     o = G1_SEC * 512 + G1_OFF
     if disk1[o:o + 28] not in G1_ORIG:
@@ -92,13 +134,18 @@ def assemble(mapper, fray, tmp):
     with open(os.path.join(tmp, 'fray.dos'), 'wb') as f:
         f.write(fray)
     r = subprocess.run([SJASM, f'-DMAPPER={mapper}', '--nologo', '--msg=war',
-                        f'--lst=cart_{MAPPERS[mapper]}.lst', 'cart.asm'],
+                        f'--lst=cart_{MAPPERS[mapper]}.lst', '--sym=cart.sym', 'cart.asm'],
                        cwd=tmp, capture_output=True, text=True)
     if r.returncode:
         sys.exit(r.stdout + r.stderr)
     boot = open(os.path.join(tmp, 'cart.bin'), 'rb').read()
     assert len(boot) == 0x4000, len(boot)
-    return boot
+    sym = {}
+    for line in open(os.path.join(tmp, 'cart.sym')):
+        m = line.split()
+        if len(m) == 3 and m[1] == 'EQU' and m[0].endswith(':'):
+            sym[m[0][:-1]] = int(m[2], 16)
+    return boot, sym
 
 
 def main():
@@ -114,20 +161,24 @@ def main():
     outdir = sys.argv[4] if len(sys.argv) > 4 else '.'
     fray = fat12_file(disks[0], b'FRAY    DOS')
     disks[0] = patch_g1(disks[0])
-    data = b''.join(disks) + user
-    assert DATA + len(data) <= FONT
     with tempfile.TemporaryDirectory() as tmp:
+        syms = {}
+        boots = {}
+        for mapper in MAPPERS:
+            boots[mapper], syms[mapper] = assemble(mapper, fray, tmp)
+        ui = [ui_patches(syms[m]) for m in MAPPERS]
+        assert all(u == ui[0] for u in ui), 'page-3 UI addresses differ between mappers'
+        disks[0] = patch_ui(disks[0], syms[1])
+        data = b''.join(disks) + user
+        assert DATA + len(data) <= FONT
         for mapper, tag in MAPPERS.items():
-            boot = assemble(mapper, fray, tmp)
+            boot = boots[mapper]
             rom = bytearray(b'\xff' * ROMSIZE)
             rom[0:len(boot)] = boot
             rom[DATA:DATA + len(data)] = data
             rom[FONT:FONT + FONTSIZE] = font
-            for area, disk in enumerate((disks[0], user)):
-                for n in range(8):
-                    src = (SAVEFIRST + 2 * n) * 512
-                    dst = SAVE + (area * 8 + n) * SAVESLOT
-                    rom[dst:dst + 1024] = disk[src:src + 1024]
+            for off, b in save_layout(disks[0], user).items():
+                rom[off:off + len(b)] = b
             out = os.path.join(outdir, f'ICITY_{tag}.rom')
             with open(out, 'wb') as f:
                 f.write(rom)
