@@ -3,6 +3,8 @@
  * Inputs (Uint8Array): the eight game disks (identified by the IPROJ0n label), an optional user disk,
  * an optional font (KANJI.rom layout), DOS system files.  Output: a file list and a FAT12 hard-disk image
  * (or a zip of the same files).  No data of the game is embedded; only the launcher and a boot sector are.
+ * buildCart: the cartridge ROMs (Yamanooto / ASCII16-X, 8MB each), port of hdtool/cart/mkcart.py; the page carries
+ * only the cartridge's own 16KB boot block per mapper, FRAY.DOS comes from the given disk 1.
  */
 (function (root) {
   'use strict';
@@ -211,5 +213,57 @@
   }
   function flatten(nodes, prefix, out) { out = out || []; for (const n of nodes) { if (n.dir) flatten(n.dir, prefix + n.name + '/', out); else out.push({ path: prefix + n.name, data: n.data }); } return out; }
 
-  root.ICITY = { classify, build, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
+  /* ---------------------------------------------------------------- cartridge ROMs (hdtool/cart/mkcart.py) */
+  /* root-directory file of a FAT12 disk image */
+  function fat12File(disk, name) {
+    const bps = u16(disk, 11), spc = disk[13], res = u16(disk, 14), nfat = disk[16], nroot = u16(disk, 17), spf = u16(disk, 22);
+    const root = (res + nfat * spf) * bps, data = root + nroot * 32, fat = disk.subarray(res * bps, (res + spf) * bps);
+    for (let i = 0; i < nroot; i++) {
+      const e = root + i * 32;
+      if (asciiAt(disk, e, 11) !== name) continue;
+      let cl = u16(disk, e + 26); const size = (u16(disk, e + 28) | (u16(disk, e + 30) << 16)) >>> 0, out = new Uint8Array(size);
+      let p = 0;
+      while (cl >= 2 && cl < 0xFF8 && p < size) {
+        const off = data + (cl - 2) * spc * bps, n = Math.min(spc * bps, size - p);
+        out.set(disk.subarray(off, off + n), p); p += n;
+        const v = u16(fat, (cl * 3) >> 1); cl = cl & 1 ? v >> 4 : v & 0xFFF;
+      }
+      if (p < size) throw new Error(name.trim() + ': FAT chain shorter than the file');
+      return out;
+    }
+    throw new Error('disk 1 has no ' + name.replace(/ +/, '.').trim());
+  }
+  /* opts: {assets, cls, keepSaves, log} -> [{tag, name, rom}] */
+  function buildCart(opts) {
+    const C = opts.assets.cart, log = opts.log || (() => { }), cls = opts.cls;
+    const disks = [];
+    for (let n = 1; n <= 8; n++) { const d = cls.disks[n]; if (!d) throw new Error('game disk ' + n + ' (IPROJ0' + n + ') is missing'); disks.push(d.data.slice()); }
+    if (!cls.font) throw new Error('the cartridge needs the font (KANJI.rom, 262144 bytes)');
+    if (cls.font.data.length !== C.fontSize) throw new Error('font: expected ' + C.fontSize + ' bytes');
+    let user;
+    if (cls.user && opts.keepSaves !== false) { user = cls.user.data; log('user disk: ' + cls.user.name); }
+    else { user = new Uint8Array(DISK_BYTES); user.set(disks[0].subarray(0, SEC), 0); user.set(new TextEncoder().encode('USERDISK'), 3); log('user disk: blank'); }
+    const fray = fat12File(disks[0], 'FRAY    DOS');
+    if (fray.length !== C.frayLen) throw new Error('FRAY.DOS is ' + fray.length + ' bytes, the cartridge was built for ' + C.frayLen + ' - this is not the supported release');
+    // patch G1: the game's glyph fetch -> the cartridge's font
+    const g = C.g1, o = g.sector * SEC + g.offset;
+    if (!g.orig.some(h => same(disks[0], o, hexBytes(h)))) throw new Error('patch G1: the bytes on disk 1 do not match - this is not the supported release');
+    disks[0].set(hexBytes(g.new), o);
+    log('FRAY.DOS ' + fray.length + ' bytes, patch G1 applied');
+    const out = [];
+    for (const m of C.mappers) {
+      const rom = new Uint8Array(C.romSize).fill(0xFF);
+      rom.set(b64(m.boot), 0);
+      rom.set(fray, m.frayOff);
+      disks.forEach((d, i) => rom.set(d, C.data + i * DISK_BYTES));
+      rom.set(user, C.data + 8 * DISK_BYTES);
+      rom.set(cls.font.data, C.font);
+      [disks[0], user].forEach((d, area) => { for (let n = 0; n < 8; n++) { const src = (C.saveFirst + 2 * n) * SEC; rom.set(d.subarray(src, src + 2 * SEC), C.save + (area * 8 + n) * C.saveSlot); } });
+      out.push({ tag: m.tag, name: m.name, rom });
+    }
+    log('ROM: ' + out.map(r => r.name).join(', ') + ' (' + (C.romSize >> 20) + 'MB each)');
+    return out;
+  }
+
+  root.ICITY = { classify, build, buildCart, fat12File, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
 })(typeof window !== 'undefined' ? window : globalThis);

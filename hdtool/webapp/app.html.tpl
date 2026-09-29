@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>환영도시 DSK 만들기</title>
+<title>환영도시 DSK·ROM 만들기</title>
 <style>
 :root{--bg:#f6f5f2;--card:#fff;--ink:#1d1d1f;--mute:#6b6b70;--line:#dcdad4;--acc:#1f5fd6;--acc-ink:#fff;--ok:#1a7f45;--bad:#b3261e;--warn:#8a5a00;--chip:#eceae4}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--card:#1e1e21;--ink:#ececee;--mute:#9a9aa2;--line:#33333a;--acc:#6ea0ff;--acc-ink:#0b1020;--ok:#5fd18a;--bad:#ff8a80;--warn:#f0c060;--chip:#2a2a2f}}
@@ -47,14 +47,14 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 </head>
 <body>
 <main>
-<h1>환영도시(ILLUSION CITY) DSK 만들기</h1>
-<p class="sub">게임 디스크와 DOS 파일을 올리면 MSX-DOS2 하드디스크용 <b>.dsk</b>(또는 SD 카드에 복사할 ZIP)를 만들어 줍니다. 모든 처리는 이 브라우저 안에서만 이뤄지고 파일은 어디로도 전송되지 않습니다.</p>
+<h1>환영도시(ILLUSION CITY) DSK·ROM 만들기</h1>
+<p class="sub">게임 디스크와 DOS 파일을 올리면 MSX-DOS2 하드디스크용 <b>.dsk</b>(또는 SD 카드에 복사할 ZIP)를, 또는 꽂기만 하면 되는 <b>카트리지 ROM</b>(Yamanooto / ASCII16-X)을 만들어 줍니다. 모든 처리는 이 브라우저 안에서만 이뤄지고 파일은 어디로도 전송되지 않습니다.</p>
 
 <section>
 <h2><span class="n">1</span>파일 올리기</h2>
 <div id="drop" tabindex="0" role="button" aria-label="파일 올리기">
   <b>여기로 파일을 끌어다 놓거나 눌러서 선택</b>
-  <small>게임 디스크 8장(.dsk 또는 zip) · 유저 디스크(선택) · KANJI.rom(선택) · MSXDOS2.SYS + COMMAND2.COM 또는 NEXTOR.SYS (zip 가능)</small>
+  <small>게임 디스크 8장(.dsk 또는 zip) · 유저 디스크(선택) · KANJI.rom(DSK는 선택, ROM은 필수) · MSXDOS2.SYS + COMMAND2.COM 또는 NEXTOR.SYS (DSK만, zip 가능)</small>
 </div>
 <input id="pick" type="file" multiple hidden>
 <div class="checks" id="checks"></div>
@@ -63,20 +63,23 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 
 <section>
 <h2><span class="n">2</span>옵션</h2>
-<div class="row"><label>시작할 때 자동 실행</label>
+<div class="row"><label>만들 것</label>
+  <div class="seg" data-opt="target"><button data-v="dsk" aria-pressed="true">DOS2 디스크 (DSK / SD)</button><button data-v="cart">카트리지 ROM</button></div>
+  <div class="hint" id="targetHint">MSX-DOS2(또는 Nextor)가 있는 하드디스크·SD 카드에서 ICITY.COM으로 실행합니다.</div></div>
+<div class="row dsk-only"><label>시작할 때 자동 실행</label>
   <div class="seg" data-opt="autoexec"><button data-v="on">AUTOEXEC.BAT 사용</button><button data-v="off" aria-pressed="true">사용 안 함</button></div>
   <div class="hint">켜면 부팅하자마자 ICITY를 실행합니다. 런처 오류 메시지가 순식간에 지나갈 수 있어 처음에는 끄는 것을 권합니다.</div></div>
-<div class="row"><label>글자(한글 폰트)</label>
+<div class="row dsk-only"><label>글자(한글 폰트)</label>
   <div class="seg" data-opt="font"><button data-v="file" id="fontFile" disabled>FONT.BIN 사용</button><button data-v="rom" aria-pressed="true">기계의 한자 ROM 사용</button></div>
   <div class="hint" id="fontHint">KANJI.rom을 올리면 한자 ROM 없이도 한글이 나옵니다.</div></div>
 <div class="row"><label>세이브</label>
   <div class="seg" data-opt="saves"><button data-v="keep" aria-pressed="true">올린 유저 디스크의 세이브 유지</button><button data-v="blank">빈 세이브로 시작</button></div></div>
-<div class="row" id="dosRow" hidden><label>DOS 종류</label>
+<div class="row dsk-only" id="dosRow" hidden><label>DOS 종류</label>
   <div class="seg" data-opt="dos"><button data-v="ascii" aria-pressed="true">ASCII DOS2</button><button data-v="nextor">Nextor</button></div>
   <div class="hint">두 종류의 파일이 모두 올라와 있어 선택합니다.</div></div>
-<div class="row"><label>README.TXT 포함</label>
+<div class="row dsk-only"><label>README.TXT 포함</label>
   <div class="seg" data-opt="readme"><button data-v="on" aria-pressed="true">포함</button><button data-v="off">제외</button></div></div>
-<div class="row"><label>볼륨 이름</label><input id="label" type="text" value="ICITYDOS2" maxlength="11" spellcheck="false"></div>
+<div class="row dsk-only"><label>볼륨 이름</label><input id="label" type="text" value="ICITYDOS2" maxlength="11" spellcheck="false"></div>
 </section>
 
 <section>
@@ -85,6 +88,8 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
   <button class="primary" id="make" disabled>만들기</button>
   <button class="dl" id="dlDsk" disabled>DSK 내려받기</button>
   <button class="dl" id="dlZip" disabled>ZIP 내려받기 (SD 카드용)</button>
+  <button class="dl" id="dlYAMA" disabled hidden>Yamanooto ROM 내려받기</button>
+  <button class="dl" id="dlA16X" disabled hidden>ASCII16-X ROM 내려받기</button>
 </div>
 <div id="msg"></div>
 <pre id="log" hidden></pre>
@@ -92,7 +97,8 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 
 <footer>
 DSK: 16MB FAT12 하드디스크 이미지 (openMSX <code>-ext ide</code> / Nextor 확장의 <code>hda</code>). ZIP: 안의 ICITY.COM 과 ICITY 폴더를 SD 카드 루트에 복사하세요.
-게임 데이터·DOS 파일·폰트는 앱에 들어 있지 않습니다. 앱에는 런처(ICITY.COM)와 부트 섹터만 들어 있습니다.
+ROM: 8MB 플래시 카트리지용(Yamanooto 또는 ASCII16-X, 각각 파일 하나). 카트리지만 꽂고 켜면 시작하고, 한글은 ROM 안의 폰트로 나오며(한자 ROM 불필요), 디스크 1·유저 디스크 슬롯 세이브는 카트리지 플래시에 기록됩니다. openMSX: <code>-carta ICITY_YAMA.rom -romtype Yamanooto</code>.
+게임 데이터·DOS 파일·폰트는 앱에 들어 있지 않습니다. 앱에는 런처(ICITY.COM), 부트 섹터, 카트리지 부트 코드만 들어 있습니다.
 </footer>
 </main>
 
@@ -105,8 +111,8 @@ DSK: 16MB FAT12 하드디스크 이미지 (openMSX <code>-ext ide</code> / Nexto
 'use strict';
 const A = JSON.parse(document.getElementById('assets').textContent);
 const $ = id => document.getElementById(id);
-const opts = { autoexec:'off', font:'rom', saves:'keep', dos:'ascii', readme:'on' };
-let items = [], cls = null, result = null;
+const opts = { target:'dsk', autoexec:'off', font:'rom', saves:'keep', dos:'ascii', readme:'on' };
+let items = [], cls = null, result = null, roms = null;
 
 async function inflate(raw){
   if (typeof DecompressionStream === 'undefined') throw new Error('이 브라우저는 zip 해제를 지원하지 않습니다. 압축을 풀어서 올려 주세요. (Chrome/Edge/Firefox/Safari 최신 버전)');
@@ -119,12 +125,18 @@ function segs(){
       if (b.disabled) return;
       opts[seg.dataset.opt] = b.dataset.v;
       seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
-      invalidate();
+      invalidate(); if (seg.dataset.opt === 'target') { applyTarget(); refresh(); }
     }));
   });
 }
 function setSeg(name, v){ document.querySelectorAll('.seg[data-opt="'+name+'"] button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false')); opts[name] = v; }
-function invalidate(){ result = null; $('dlDsk').disabled = true; $('dlZip').disabled = true; }
+function invalidate(){ result = null; roms = null; ['dlDsk','dlZip','dlYAMA','dlA16X'].forEach(id => $(id).disabled = true); }
+function applyTarget(){
+  const cart = opts.target === 'cart';
+  document.querySelectorAll('.dsk-only').forEach(r => { if (r.id === 'dosRow') r.hidden = cart || !(cls && cls.dos['MSXDOS2.SYS'] && cls.dos['NEXTOR.SYS']); else r.hidden = cart; });
+  $('dlDsk').hidden = cart; $('dlZip').hidden = cart; $('dlYAMA').hidden = !cart; $('dlA16X').hidden = !cart;
+  $('targetHint').textContent = cart ? '카트리지만 꽂으면 부팅됩니다(디스크 드라이브·DOS 불필요). KANJI.rom이 필요합니다.' : 'MSX-DOS2(또는 Nextor)가 있는 하드디스크·SD 카드에서 ICITY.COM으로 실행합니다.';
+}
 
 async function ingest(files){
   for (const f of files) items.push({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) });
@@ -149,10 +161,13 @@ async function refresh(){
   else { if (opts.font === 'rom' && !$('fontFile').dataset.userRom) setSeg('font', 'file'); $('fontHint').textContent = 'FONT.BIN 사용: 한자 ROM 없이도 한글이 나옵니다.'; }
   $('dosRow').hidden = !(hasA && hasN);
   if (hasA && !hasN) opts.dos = 'ascii'; else if (hasN && !hasA) opts.dos = 'nextor';
+  applyTarget();
   const ok = [1,2,3,4,5,6,7,8].every(n => cls.disks[n]);
-  $('make').disabled = !ok;
+  const cart = opts.target === 'cart';
+  $('make').disabled = !ok || (cart && !cls.font);
   if (!ok) show('bad', '게임 디스크 1~8이 모두 필요합니다. (디스크 라벨 IPROJ01~IPROJ08로 자동 인식합니다.)');
-  else if (!hasA && !hasN) show('warn', 'DOS 시스템 파일이 없습니다. 만들 수는 있지만 이미지만으로는 부팅되지 않습니다.');
+  else if (cart && !cls.font) show('bad', '카트리지 ROM에는 한글 폰트 KANJI.rom(262144바이트)이 필요합니다.');
+  else if (!cart && !hasA && !hasN) show('warn', 'DOS 시스템 파일이 없습니다. 만들 수는 있지만 이미지만으로는 부팅되지 않습니다.');
 }
 function show(kind, text){ const m = $('msg'); m.className = kind === 'bad' ? 'bad' : kind === 'ok' ? 'ok' : ''; m.style.color = kind === 'warn' ? 'var(--warn)' : ''; m.textContent = text; }
 
@@ -162,6 +177,12 @@ async function make(){
   show('', '만드는 중...');
   await new Promise(r => setTimeout(r, 30));
   try {
+    if (opts.target === 'cart') {
+      roms = ICITY.buildCart({ assets: A, cls, keepSaves: opts.saves === 'keep', log: L });
+      $('dlYAMA').disabled = false; $('dlA16X').disabled = false;
+      show('ok', '완료: 카트리지 ROM(8MB)을 내려받을 수 있습니다. 가지고 있는 카트리지 종류에 맞는 것을 고르세요.');
+      $('make').disabled = false; return;
+    }
     const use = Object.assign({}, cls, { dos: {} });
     const want = opts.dos === 'nextor' ? ['NEXTOR.SYS','COMMAND2.COM'] : ['MSXDOS2.SYS','COMMAND2.COM'];
     for (const n of want) if (cls.dos[n]) use.dos[n] = cls.dos[n];
@@ -194,6 +215,7 @@ document.querySelector('.seg[data-opt="font"] button[data-v="file"]').addEventLi
 $('make').addEventListener('click', make);
 $('dlDsk').addEventListener('click', () => result && save('ICITY' + (opts.autoexec === 'on' ? '_AUTO' : '') + '.dsk', result.image));
 $('dlZip').addEventListener('click', () => result && save('ICITY_SD.zip', ICITY.zipWrite(result.files), 'application/zip'));
+['YAMA','A16X'].forEach(t => $('dl' + t).addEventListener('click', () => { const r = roms && roms.find(x => x.tag === t); if (r) save('ICITY_' + t + '.rom', r.rom); }));
 })();
 </script>
 </body>
