@@ -106,7 +106,7 @@ def get_patches(midi, font=False):
     #        (96 slots per disk, left/right pages; addresses checked by ASSERTs in icity.asm)
     w = lambda a: bytes([a & 0xFF, a >> 8])
     f9 = lambda a: (156 + (a - 0x4000) // 512, (a - 0x4000) % 512)
-    CBK, FIXNO, FIXSEL, NEWLIST, SECOF = 0xE9AA, 0xE9F7, 0x00F6, 0xE9EA, 0xE9DB
+    CBK, FIXNO, FIXSEL, NEWLIST, SECOF = 0xE9AA, 0xE9F4, 0x00F6, 0xE9E7, 0xE9D8
     pl.append(P("P1", f9(0x590A), bytes.fromhex("210000"), b"\x21" + w(CBK)))
     pl.append(P("P2", f9(0x5957), bytes.fromhex("326ad5"), b"\xcd" + w(FIXNO)))
     pl.append(P("P3", f9(0x5910), bytes.fromhex("32c55e"), b"\xcd" + w(FIXSEL)))
