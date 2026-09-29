@@ -1,0 +1,4 @@
+39.16 4006 A=04 ret=E240 83FB=14
+39.17 rd sec=014A n=1 dst=014A ret=42DF seg=E3/F0/F2
+39.50 rd sec=014B n=1 dst=014B ret=42DF seg=E3/F0/F2
+123.71 rd sec=02C8 n=1 dst=02C8 ret=42DF seg=E3/F0/FE
