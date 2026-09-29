@@ -1,0 +1,38 @@
+일루전 시티 (한글) - MSX-DOS2 하드디스크판
+============================================
+
+필요한 것
+  - MSX turbo R (FS-A1GT) 512KB, MSX-DOS2 (내장 ASCII DOS2 또는 Nextor) 로 부팅되는 SD/CF/IDE 저장장치
+  - 빈 공간 약 10MB, 한자 ROM은 필요 없음 (ICITY\FONT.BIN 을 사용)
+
+설치
+  1. 이 폴더 안의 ICITY.COM 과 ICITY 폴더를 저장장치의 루트에 그대로 복사한다.
+       X:\ICITY.COM
+       X:\ICITY\D1 ... D8, DU, SAVE, FONT.BIN
+  2. DOS2로 부팅해서 그 드라이브에서 ICITY 를 실행한다.
+       A:\> ICITY
+
+실행하면
+  - 첫 줄에 빈 매퍼 세그먼트 수와 모드가 표시된다.
+      mode segments: 13 MIDI+FM   -> 시작 후 음원 선택 메뉴(FM / MIDI)가 나온다 (빈 세그먼트 19개 이상)
+      mode segments: 10 FM only   -> FM 음원으로 바로 시작한다 (빈 세그먼트 16~18개)
+  - 빈 세그먼트가 16개 미만이면 "not enough free mapper segments" 로 종료한다. 이때 표시된 숫자를 알려 주세요.
+  - 게임 메뉴: 세이브 시점에서 / 오프닝에서 / 스타트 지점에서.  디스크 교체 화면은 나오지 않는다.
+
+세이브
+  - \ICITY\SAVE\D1_0578.DAT (디스크 1 슬롯), \ICITY\SAVE\DU_0578.DAT (유저 디스크 슬롯) 파일에 기록된다.
+  - 이 두 파일은 지우지 말고, 백업할 때 함께 복사한다.
+  - 처음 배포된 DU_0578.DAT 에는 만든 시점의 세이브가 들어 있다.
+
+문제가 생기면
+  - "DOS error xx (fn sec cnt addr file)" 가 나오면 그 줄 전체를 알려 주세요.
+  - 파일이 1234개라 느리게 열리면 make_dist.sh 에 MERGE=16 을 주고 다시 만들 수 있다 (조각 507개).
+  - 위 표시가 나오기 전에 멈추면 MSX-DOS2 로 부팅되었는지(A:\> 또는 A> 프롬프트) 확인한다.
+
+폴더 안 파일
+  ICITY.COM        런처 (DOS2 위에서 게임 환경을 만들고 파일을 읽어 준다)
+  ICITY\Dn\        디스크 n 을 잘라 놓은 파일들 (파일 이름 = 시작 섹터)
+  ICITY\DU\        유저 디스크
+  ICITY\SAVE\      세이브 슬롯 파일
+  ICITY\FONT.BIN   글리프 폰트 (16x16, 글리프 번호 x 32바이트)
+  SHA1SUMS.txt     모든 파일의 SHA-1 (복사가 깨졌는지 확인용)
