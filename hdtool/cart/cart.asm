@@ -652,31 +652,36 @@ erase64: call   fmap
         ld      (hl),30h
         ld      c,0FFh
         jr      fdone
-; prog32: DE = ROM sector, (soff) = offset (32-byte aligned) -> program cbuf there (write buffer). NZ = timeout.
+; prog32: DE = ROM sector, (soff) = offset -> program the 32 bytes of cbuf there, byte by byte (A0h: the
+; command every flash emulation has; the MiSTer cores ignore write-buffer programming). FFh bytes are skipped
+; (the sector was just erased). NZ = timeout.
 prog32: call    fmap
         ld      de,(soff)
         add     hl,de
-        call    unlock
-        ld      (hl),25h
-        ld      (hl),31
-        push    hl
         ld      de,cbuf
-        ld      c,32
-.l:     ld      a,(de)
+        ld      a,32
+.l:     push    af
+        ld      a,(de)
+        inc     a
+        jr      z,.skip
+        ld      a,0A0h
+        call    fcmd                    ; keeps HL, DE
+        ld      a,(de)
         ld      (hl),a
-        inc     de
-        inc     hl
-        dec     c
-        jr      nz,.l
-        pop     hl
-        ld      (hl),29h
-        ld      de,31
-        add     hl,de
-        ld      a,(cbuf+31)
         ld      c,a
+        call    fwait
+        jr      nz,.fail
+.skip:  inc     de
+        inc     hl
+        pop     af
+        dec     a
+        jr      nz,.l
+        jr      fdone.ok                ; Z
+.fail:  pop     bc
+        jr      fdone.bad
 fdone:  call    fwait
         jr      z,.ok
-        ld      (hl),0F0h               ; reset to read mode
+.bad:   ld      (hl),0F0h               ; reset to read mode
 .ok:    jp      funmap
         ENT
 envlen  equ     $-envimg
