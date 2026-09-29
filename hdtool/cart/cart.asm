@@ -7,9 +7,10 @@
 ;   page 3 DD92h-DF7Dh (the DOS1 environment's area, HIMEM=DF7Eh): the routines behind them
 ;   page 3 EF80h-F139h: F37D handler, 1Ah (DTA) and 2Fh (sector read). In the original this is the
 ;     DOS1 disk driver's page-3 code, which runs on every sector read, so the game never writes it.
-;   30h (sector write = save) is not handled yet: it returns A=0 and writes nothing.
-;   page 3 E980h-E9FFh (never touched by the game): glyph fetch. mkcart.py patches the game's only
-;     Kanji-ROM access (file7 2AB9h, patch G1) into JP E980h; the glyph comes from the font in the ROM
+;   30h (sector write = save): the save slots (disk 1 / user disk 0578h-0587h) are redirected to
+;     16 flash sectors of 64KB at 6B0000h; a write erases the slot's flash sector and programs it.
+;   page 3 E947h-E9FFh (never touched by the game): glyph fetch + flash helpers. mkcart.py patches the
+;     game's only Kanji-ROM access (file7 2AB9h, patch G1) into JP E947h; the glyph comes from the font in the ROM
 ;     (FONT.BIN, KANJI.rom layout), so the machine's Kanji ROM is never used.
 ; A sector read copies straight from the ROM: offset 10000h + ((disk-1)*1440 + sector)*512.
 ;
@@ -27,11 +28,12 @@ BDOSJP  equ 0F37Dh
 SUBREG  equ 0FFFFh
 WANTDSK equ 5EC0h               ; engine: wanted disk (0-7 = 1-8, 10 = user disk), in page 1
 DATASEC equ 128                 ; ROM offset of disk 1 sector 0, in 512-byte sectors (10000h)
+SAVESEC equ 3580h               ; ROM offset of the save slots (6B0000h, 16 x 64KB), mkcart.py SAVE
 ENVTOP  equ 0DD92h              ; interrupt stack grows down from here (as the DOS1 environment)
 ENVEND  equ 0DF7Eh
 RESBASE equ 0EF80h              ; see the header
 RESEND  equ 0F13Ah
-GLYPHW  equ 0E980h              ; patch G1 jumps here
+GLYPHW  equ 0E947h              ; patch G1 jumps here (E947h-E9FFh: glyph fetch + flash helpers)
 GLYEND  equ 0EA00h
 FONTSEC equ 3320h               ; ROM offset of the font (664000h) in 512-byte sectors (mkcart.py FONT)
 
@@ -474,6 +476,100 @@ inth:   push    hl
         ei
         ret
 savsp:  dw      0
+
+; 30h: DE = first sector, H = count, source = DTA. Only save-slot sectors are written (the game writes
+; one slot: 2 sectors at 0578h+2n from F400h); anything else is ignored. A = 0 done, 1 flash timeout.
+wrabs:  ld      b,h
+        ld      hl,(dta)
+.sec:   push    bc
+        push    de
+        push    hl
+        call    romsec
+        ld      a,d
+        cp      HIGH SAVESEC
+        jr      c,.skip
+        call    flashsec
+        jr      nz,.err
+.skip:  pop     hl
+        ld      bc,512
+        add     hl,bc
+        pop     de
+        inc     de
+        pop     bc
+        djnz    .sec
+        xor     a
+        ei
+        ret
+.err:   pop     hl
+        pop     de
+        pop     bc
+        ld      a,1
+        ei
+        ret
+
+; flashsec: DE = ROM sector (first 8KB of a 64KB flash sector), HL = 512 bytes of RAM.
+; Even sector: erase the 64KB flash sector first. Z = done, NZ = timeout.
+flashsec:
+        ld      a,e
+        and     1
+        ld      (fpar),a
+        push    hl
+        ld      a,h                     ; window page: 2, or 1 when the data is in page 2
+        and     0C0h
+        cp      80h
+        ld      a,40h
+        jr      z,.w
+        ld      a,80h
+.w:     ld      (wpg),a
+        ld      h,40h
+        call    curslot
+        ld      (sv1),a
+        ld      h,80h
+        call    curslot
+        ld      (sv2),a
+        call    setbank                 ; HL = target in the window
+        ld      a,10h                   ; Yamanooto: ENAR = WREN
+        call    wren
+        pop     de                      ; DE = source
+        ld      a,(wpg)
+        ld      b,a                     ; B = window base (command addresses)
+        ld      a,(fpar)
+        or      a
+        jr      nz,.prog
+        ld      a,80h
+        call    fcmd
+        call    unlock
+        ld      (hl),30h
+        ld      c,0FFh
+        call    fwait
+        jr      nz,.done
+.prog:  ld      a,0A0h
+        call    fcmd
+        ld      a,(de)
+        ld      (hl),a
+        ld      c,a
+        call    fwait
+        jr      nz,.done
+        inc     de
+        inc     hl
+        ld      a,l
+        or      a
+        jr      nz,.prog
+        bit     0,h
+        jr      nz,.prog                ; 512 bytes (target is 512-aligned)
+.done:  push    af
+        jr      z,.ok
+        ld      (hl),0F0h               ; reset to read mode
+.ok:    xor     a
+        call    wren
+        ld      a,(sv1)
+        ld      h,40h
+        call    enaslt
+        ld      a,(sv2)
+        ld      h,80h
+        call    enaslt
+        pop     af
+        ret
         ENT
 envlen  equ     $-envimg
         ASSERT  ENVTOP+envlen <= ENVEND
@@ -485,10 +581,12 @@ resimg:
 bdos:   ld      a,c
         cp      2Fh
         jr      z,rdabs
+        cp      30h
+        jp      z,wrabs
         cp      1Ah
         jr      nz,.nop
         ld      (dta),de
-.nop:   xor     a                       ; 30h (save) included: not implemented yet
+.nop:   xor     a
         ret
 ; 2Fh: DE = first sector, H = count, L = drive (always A:). Sector 0 = disk identification:
 ; switch to the disk the engine wants first (same rule as hdtool/hook.asm).
@@ -503,18 +601,11 @@ rdabs:  ld      a,d
         ld      a,8
 .p1:    inc     a
         ld      (cur),a
-.go:    push    hl
-        ld      a,(cur)
-        ld      hl,DATASEC-1440
-        ld      bc,1440
-.mul:   add     hl,bc
-        dec     a
-        jr      nz,.mul
-        add     hl,de
-        ex      de,hl                   ; DE = ROM sector number
-        pop     bc                      ; B = count
+.go:    ld      b,h                     ; B = count, DE = disk sector
         ld      hl,(dta)
 .sec:   push    bc
+        push    de
+        call    romsec
         ld      bc,512
         ld      (left),bc
         ld      bc,0
@@ -548,11 +639,64 @@ rdabs:  ld      a,d
         ld      (soff),hl
         pop     hl
         jr      nz,.chunk
+        pop     de
         inc     de
         pop     bc
         djnz    .sec
         xor     a
         ei
+        ret
+
+; romsec: DE = sector of the current disk -> DE = ROM sector. Keeps BC, HL.
+; Save slots (disk 1 and user disk, 0578h-0587h, 2 sectors each) live in their own 64KB flash sectors:
+; ROM sector SAVESEC + slot*128 + (sector&1), slot = user*8 + (sector-0578h)/2.
+romsec: push    hl
+        push    bc
+        ld      a,(cur)
+        cp      1
+        jr      z,.sv
+        cp      9
+        jr      nz,.lin
+.sv:    ld      hl,-578h
+        add     hl,de
+        jr      nc,.lin
+        ld      a,h
+        or      a
+        jr      nz,.lin
+        ld      a,l
+        cp      10h
+        jr      nc,.lin
+        ld      a,(cur)
+        cp      9
+        ld      a,l
+        jr      nz,.d1
+        add     a,10h
+.d1:    ld      c,a
+        and     1Eh
+        ld      l,a
+        ld      h,0
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        ld      a,c
+        and     1
+        or      l
+        ld      l,a
+        ld      de,SAVESEC
+        jr      .add
+.lin:   ld      a,(cur)
+        ld      hl,DATASEC-1440
+        ld      bc,1440
+.mul:   add     hl,bc
+        dec     a
+        jr      nz,.mul
+.add:   add     hl,de
+        ex      de,hl
+        pop     bc
+        pop     hl
         ret
 
 ; xfer: copy BC bytes from ROM sector DE + (soff) to HL. HL advanced, BC and DE kept.
@@ -757,7 +901,7 @@ reslen  equ     $-resimg
         ASSERT  RESBASE+reslen <= RESEND
 
 ; ---------------------------------------------------------------------------------------------
-; page 3 E980h: glyph fetch, replaces the body of file7 2AB9h (patch G1 = JP E980h).
+; page 3 E947h: glyph fetch, replaces the body of file7 2AB9h (patch G1 = JP E947h).
 ; In: HL = glyph code as the game gives it. Out: 32 bytes at D500h, HL=D520h, BC=00D9h like the
 ; original INIR; DE kept, interrupt state kept. idx = (hi&7Fh)<<6 | (lo&3Fh) (hi bit 6 = level 2),
 ; font offset = idx*32 = sector FONTSEC + idx/16, byte (idx&15)*32.
@@ -811,6 +955,78 @@ glyph:  ld      a,l                     ; as the original: H = (HL*4)>>8, L unch
 .di:    ld      hl,0D520h
         ld      bc,00D9h
         ret
+
+; unlock: AAh -> window+AAAh, 55h -> window+555h (B = window base high byte). Keeps HL.
+unlock: push    hl
+        ld      a,b
+        add     a,0Ah
+        ld      h,a
+        ld      l,0AAh
+        ld      (hl),l
+        ld      a,b
+        add     a,05h
+        ld      h,a
+        ld      l,55h
+        ld      (hl),l
+        pop     hl
+        ret
+; fcmd: unlock, then A -> window+AAAh. Keeps HL.
+fcmd:   push    af
+        call    unlock
+        pop     af
+        push    hl
+        ld      c,a
+        ld      a,b
+        add     a,0Ah
+        ld      h,a
+        ld      l,0AAh
+        ld      (hl),c
+        pop     hl
+        ret
+; fwait: until (HL) = C. Z = done, NZ = timeout (several seconds).
+fwait:  push    de
+        ld      de,0
+        ld      a,40h
+        ld      (tmo),a
+.l:     ld      a,(hl)
+        cp      c
+        jr      z,.ok
+        dec     de
+        ld      a,d
+        or      e
+        jr      nz,.l
+        ld      a,(tmo)
+        dec     a
+        ld      (tmo),a
+        jr      nz,.l
+        or      1
+.ok:    pop     de
+        ret
+; wren: A = ENAR value (Yamanooto only; 7FFFh is reachable in page 1 only). Keeps HL, DE, B.
+wren:
+        IF MAPPER == 1
+        push    hl
+        push    de
+        push    bc
+        push    af
+        ld      a,(cartsl)
+        ld      h,40h
+        call    enaslt
+        pop     af
+        ld      (7FFFh),a
+        ld      a,(wpg)
+        cp      40h
+        jr      z,.p1
+        ld      a,(sv1)
+        ld      h,40h
+        call    enaslt
+.p1:    pop     bc
+        pop     de
+        pop     hl
+        ENDIF
+        ret
+fpar:   db      0
+tmo:    db      0
         ENT
 glylen  equ     $-glyimg
         ASSERT  GLYPHW+glylen <= GLYEND

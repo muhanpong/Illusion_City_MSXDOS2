@@ -1,4 +1,4 @@
-# font.tcl - check the cartridge glyph fetch (patch G1 -> E980h) against the font file, and that the
+# font.tcl - check the cartridge glyph fetch (patch G1 -> E947h) against the font file, and that the
 # machine's Kanji ROM ports (D8h-DBh) are never written after boot.
 # env: T (output dir), END (seconds), FONT (font file), SEQ / SP0 (keys, as verify.tcl)
 set throttle off
@@ -20,7 +20,7 @@ proc gcheck {} {
   set want [string range $::font [expr {$::idx*32}] [expr {$::idx*32+31}]]
   if {$want ne [debug read_block memory 0xD500 32]} { incr ::bad; if {$::bad < 10} { L [format "MISMATCH idx %04X" $::idx] } }
 }
-debug set_bp 0xE980 {[pc_in_slot 3 0]} on_glyph
+debug set_bp 0xE947 {[pc_in_slot 3 0]} on_glyph
 debug set_watchpoint write_io {0xD8 0xDB} {[machine_info time] > 6} { incr ::kp }
 proc key {row mask} { keymatrixdown $row $mask ; after time 0.2 "keymatrixup $row $mask" }
 foreach {t k} $::env(SEQ) { if {$k eq "d"} { after time $t {key 8 0x40} } else { after time $t {key 8 0x01} } }

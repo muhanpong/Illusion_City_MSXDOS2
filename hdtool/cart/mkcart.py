@@ -11,7 +11,10 @@ ROM layout (both mappers):
   000000h  boot code, page-3 environment, FRAY.DOS (cart.asm, 16KB)
   010000h  disk 1 .. disk 8, user disk (9 x 720KB, sector s of disk d at 10000h + ((d-1)*1440+s)*512)
   664000h  font (256KB, cart.asm FONTSEC)
-  6A4000h  0FFh up to 8MB
+  6B0000h  save slots (cart.asm SAVESEC): 16 flash sectors of 64KB, slot n of disk 1 = n, of the user disk = 8+n;
+           each holds the slot's 2 sectors (0578h+2n) in its first 1KB, the rest 0FFh. Reads and writes of those
+           sectors go here; a save erases and reprograms the slot's flash sector.
+  7B0000h  0FFh up to 8MB
 """
 import os
 import shutil
@@ -26,14 +29,17 @@ DISK = 737280
 ROMSIZE = 8 << 20
 DATA = 0x10000
 FONT = 0x664000
+SAVE = 0x6B0000
+SAVESLOT = 0x10000
+SAVEFIRST = 0x578
 FONTSIZE = 0x40000
 MAPPERS = {1: 'YAMA', 2: 'A16X'}
-# G1: disk 1 sector 102 (file7 2AB9h), the game's only Kanji-ROM access (28 bytes) -> JP E980h (cart.asm glyph).
+# G1: disk 1 sector 102 (file7 2AB9h), the game's only Kanji-ROM access (28 bytes) -> JP E947h (cart.asm glyph).
 # Some copies have ports 59h/5Bh instead of D9h/DBh; both are replaced the same way.
 G1_SEC, G1_OFF = 82 + 0x29B9 // 512, 0x29B9 % 512
 G1_ORIG = [bytes.fromhex("7d29296fcb7420040e" + p + "18020e" + q + "ed610ded690c2100d50620edb2c9")
            for p, q in (("d9", "db"), ("59", "5b"))]
-G1_NEW = bytes([0xC3, 0x80, 0xE9]) + bytes(25)
+G1_NEW = bytes([0xC3, 0x47, 0xE9]) + bytes(25)
 
 
 def read_disks(path):
@@ -117,6 +123,11 @@ def main():
             rom[0:len(boot)] = boot
             rom[DATA:DATA + len(data)] = data
             rom[FONT:FONT + FONTSIZE] = font
+            for area, disk in enumerate((disks[0], user)):
+                for n in range(8):
+                    src = (SAVEFIRST + 2 * n) * 512
+                    dst = SAVE + (area * 8 + n) * SAVESLOT
+                    rom[dst:dst + 1024] = disk[src:src + 1024]
             out = os.path.join(outdir, f'ICITY_{tag}.rom')
             with open(out, 'wb') as f:
                 f.write(rom)
