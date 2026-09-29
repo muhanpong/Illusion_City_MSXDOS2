@@ -358,7 +358,7 @@
     log(nsec + ' sectors (' + where.size + ' distinct) packed to ' + Math.round(used / 1024) + 'KB');
     const out = [];
     for (const m of C.mappers) {
-      const rom = new Uint8Array(C.romSize).fill(0xFF);
+      const rom = new Uint8Array(m.fileSize || C.romSize).fill(0xFF);   // ASCII16-X: 8MB file for the MiSTer core
       rom.set(b64(m.boot), 0);
       rom.set(fray, m.frayOff);
       rom.set(lo, C.tblLo); rom.set(hi, C.tblHi);
@@ -371,7 +371,7 @@
         rom.set(d.subarray(src, src + 2 * SEC), C.save + g * 0x10000 + (p >> 3) * 0x4000 + (p & 7) * 0x400); } });
       out.push({ tag: m.tag, name: m.name, rom });
     }
-    log('ROM: ' + out.map(r => r.name).join(', ') + ' (' + (C.romSize >> 20) + 'MB each)');
+    log('ROM: ' + out.map(r => r.name + ' ' + (r.rom.length >> 20) + 'MB').join(', ') + ' (content ' + (C.romSize >> 20) + 'MB)');
     return out;
   }
 

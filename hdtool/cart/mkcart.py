@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""mkcart.py - build the Illusion City cartridge ROMs (Yamanooto and ASCII16-X, 4MB each: fit any flash of 4MB or more).
+"""mkcart.py - build the Illusion City cartridge ROMs (Yamanooto and ASCII16-X): 4MB of content, fits any flash of 4MB or
+more. The ASCII16-X file is padded to 8MB with FFh (the MiSTer core needs a file over 4MB to use its flash mapper).
 
 usage: mkcart.py <disks> <userdisk.dsk> <font> [outdir]
   <disks>: one 5898240-byte image of disks 1-8 back to back,
@@ -20,7 +21,7 @@ ROM layout (both mappers):
            in 9 flash sectors of 64KB (one spare). Slot position p of a group is the 1KB at (p/8)*16KB + (p mod 8)*1KB,
            header 'IC', group, 16-bit generation at +C000h; per group the valid, newer header wins, the sector
            without one is the spare. The disks' own 8 slots each (sectors 0578h+2n) start in groups 0 and 4.
-  3E0000h  0FFh up to 4MB
+  3E0000h  0FFh up to 4MB (8MB for the ASCII16-X file)
 """
 import hashlib
 import os
@@ -34,6 +35,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SJASM = os.path.join(HERE, 'sjasmplus')
 DISK = 737280
 ROMSIZE = 4 << 20
+# file size per mapper: the MiSTer MSX core takes an ASCII16 ROM as ASCII16-X (flash, saves) only when the file is
+# larger than 4MB (memory_upload.sv rom_big = size > 400000h), so that file is padded to 8MB with FFh
+FILESIZE = {'YAMA': 4 << 20, 'A16X': 8 << 20}
 TBLLO = 0x4000          # cart.asm TBLLO
 TBLHI = 0xA600          # cart.asm TBLHI
 DATA = 0x10000
@@ -246,7 +250,7 @@ def main():
         tlo, thi, blob, nuniq = pack(data)
         for mapper, tag in MAPPERS.items():
             boot = boots[mapper]
-            rom = bytearray(b'\xff' * ROMSIZE)
+            rom = bytearray(b'\xff' * FILESIZE[tag])
             rom[0:len(boot)] = boot
             rom[TBLLO:TBLLO + len(tlo)] = tlo
             rom[TBLHI:TBLHI + len(thi)] = thi
