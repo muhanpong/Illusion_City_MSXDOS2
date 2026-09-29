@@ -8,7 +8,7 @@
  */
 (function (root) {
   'use strict';
-  const SEC = 512, DISK_BYTES = 737280, DISK_SECTORS = 1440, SYS_LEN = 14, SAVE_START = 0x578, SAVE_LEN = 0x10;
+  const SEC = 512, DISK_BYTES = 737280, DISK_SECTORS = 1440, SYS_LEN = 14, SAVE_START = 0x578, SAVE_LEN = 0x10, SAVE_FILE = 96 * 1024;
 
   const u16 = (a, o) => a[o] | (a[o + 1] << 8);
   const hex4 = n => n.toString(16).toUpperCase().padStart(4, '0');
@@ -192,7 +192,8 @@
       const dn = 'D' + tag, dir = [];
       for (let i = 0; i < starts.length; i++) {
         const a = starts[i], b = st[i + 1], nm = dn + '_' + hex4(a) + '.DAT', data = disks[tag].subarray(a * SEC, b * SEC);
-        if (a === SAVE_START && (tag === '1' || tag === 'U')) { (chunks.SAVE = chunks.SAVE || []).push({ name: nm, data }); }
+        if (a === SAVE_START && (tag === '1' || tag === 'U')) {   // 96 slots of 1KB (paged slot list, patches P1-P6)
+          const sv = new Uint8Array(SAVE_FILE); sv.set(data, 0); (chunks.SAVE = chunks.SAVE || []).push({ name: nm, data: sv }); }
         else dir.push({ name: nm, data });
         count++;
       }

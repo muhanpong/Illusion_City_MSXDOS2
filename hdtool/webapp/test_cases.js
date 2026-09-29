@@ -12,13 +12,13 @@ let fails=0; const ok=(c,m)=>{console.log((c?'PASS ':'FAIL ')+m); if(!c) fails++
   let r=ICITY.build({assets:A,cls,useFont:false,readme:false,autoexec:false});
   let fl=ICITY.flatten(r.rootFiles,'');
   ok(!r.applied.includes('G1') && !fl.some(f=>f.path==='ICITY/FONT.BIN'),'font off: no G1 patch, no FONT.BIN');
-  ok(r.applied.join()==='L1,L4,K1,INIT,K2,M1,M2,M3','font off: other patches applied');
+  ok(r.applied.join()==='L1,L4,K1,INIT,K2,M1,M2,M3,P1,P2,P3,P4,P5,P6','font off: other patches applied (incl. save-list paging P1-P6)');
   // 2 font on
   r=ICITY.build({assets:A,cls,useFont:true}); fl=ICITY.flatten(r.rootFiles,'');
   ok(r.applied.includes('G1') && fl.some(f=>f.path==='ICITY/FONT.BIN'),'font on: G1 + FONT.BIN');
   // 3 blank saves
   r=ICITY.build({assets:A,cls,useFont:true,keepSaves:false}); fl=ICITY.flatten(r.rootFiles,'');
-  const sv=fl.find(f=>f.path==='ICITY/SAVE/DU_0578.DAT'); ok(sv && sv.data.every(b=>b===0),'blank saves: DU_0578.DAT is all zero');
+  const sv=fl.find(f=>f.path==='ICITY/SAVE/DU_0578.DAT'); ok(sv && sv.data.every(b=>b===0),'blank saves: DU_0578.DAT is all zero'); ok(sv && sv.data.length===98304,'save file holds 96 slots (96KB)');
   // 4 missing disk
   let c2=JSON.parse(JSON.stringify({}));cls=await base(); delete cls.disks[5];
   try{ICITY.build({assets:A,cls});ok(false,'missing disk should throw');}catch(e){ok(/disk 5/.test(e.message),'missing disk 5 -> "'+e.message+'"');}
