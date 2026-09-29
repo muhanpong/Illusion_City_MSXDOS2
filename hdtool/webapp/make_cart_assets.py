@@ -13,11 +13,14 @@ FRAYLEN = 3234          # FRAY.DOS of the supported release (disk 1)
 
 out = {'frayLen': FRAYLEN, 'data': mkcart.DATA, 'font': mkcart.FONT, 'fontSize': mkcart.FONTSIZE,
        'save': mkcart.SAVE, 'saveFirst': mkcart.SAVEFIRST, 'slots': mkcart.SLOTS, 'group': mkcart.GROUP,
+       'nsave': mkcart.NSAVE, 'tblLo': mkcart.TBLLO, 'tblHi': mkcart.TBLHI, 'dataEnd': mkcart.DATAEND,
        'romSize': mkcart.ROMSIZE, 'file9Sec': mkcart.FILE9_SEC, 'file9Base': mkcart.FILE9_BASE,
        'g1': {'sector': mkcart.G1_SEC, 'offset': mkcart.G1_OFF, 'orig': [o.hex() for o in mkcart.G1_ORIG], 'new': mkcart.G1_NEW.hex()},
        'mappers': []}
 with tempfile.TemporaryDirectory() as tmp:
     shutil.copy(os.path.join(cart, 'cart.asm'), tmp)
+    os.makedirs(os.path.join(tmp, 'zx0'), exist_ok=True)
+    shutil.copy(os.path.join(cart, 'zx0', 'dzx0_standard.asm'), os.path.join(tmp, 'zx0'))
     open(os.path.join(tmp, 'fray.dos'), 'wb').write(bytes(FRAYLEN))
     for mapper, tag in mkcart.MAPPERS.items():
         r = subprocess.run([mkcart.SJASM, f'-DMAPPER={mapper}', '--nologo', '--msg=war', '--sym=cart.sym', 'cart.asm'],
