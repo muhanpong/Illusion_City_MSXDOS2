@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """mkdos2.py - split the Illusion City disks into chunk files for the MSX-DOS2 launcher.
 
-usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch] [--midi]
+usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch] [--fm-only]
 
 <disk dir> holds I-City(k)(1-8).dsk .. (8-8).dsk (or D1.dsk..D8.dsk) and the user disk
 (I-City(k)(U).dsk / DU.dsk / userdisk.DSK).  Output tree:
@@ -98,11 +98,11 @@ def merge_small(bounds, fixed, minlen):
 
 def main():
     args = sys.argv[1:]
-    merge = 0; do_patch = True; midi = False
+    merge = 0; do_patch = True; midi = True
     if "--merge" in args:
         i = args.index("--merge"); merge = int(args[i+1]); del args[i:i+2]
-    if "--midi" in args:
-        args.remove("--midi"); midi = True
+    if "--fm-only" in args:                # without the MIDI-module patches (the launcher's FM-only mode does not need them)
+        args.remove("--fm-only"); midi = False
     PATCHES = get_patches(midi)
     if "--no-patch" in args:
         args.remove("--no-patch"); do_patch = False

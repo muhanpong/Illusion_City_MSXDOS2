@@ -7,9 +7,9 @@
 ;
 ; build: sjasmplus icity.asm  (needs chunks.inc from mkdos2.py in the include path)
         OUTPUT "ICITY.COM"
-        IFNDEF N_SEG
-        DEFINE N_SEG    16              ; logical segments the game may use: 16 (FM build), 19 with -DN_SEG=19 (MIDI build)
-        ENDIF
+        DEFINE N_MIDI   19              ; logical segments for MIDI+FM mode (00-12h: module, player, song reader)
+        DEFINE N_FM     16              ; logical segments for FM-only mode (E8F5=10h: the MIDI module is not loaded)
+        ; -DFORCE_FM=1 makes the launcher pick FM-only mode even when enough segments are free (testing)
         DEFINE TBL      0E960h          ; logical->physical table in game page 3 (patch K1 reads it)
         DEFINE INIT_N   0DB6h           ; LD A,N immediate inside init_map (patches.py INIT_MAP_N)
         DEFINE GSP      0E948h          ; game-side vars in game page 3 (E947-E95F unused by game)
@@ -71,12 +71,30 @@ body:
         call    phex8
         ld      de,s_need
         call    prs
-        ld      a,N_SEG
+        ; --- choose the mode from the number of free segments: >= 19 MIDI+FM (sound menu), >= 16 FM only
+        ld      a,(nfree)
+        cp      N_MIDI
+        jr      c,.fmonly
+    IFDEF FORCE_FM
+        jr      .fmonly
+    ENDIF
+        ld      a,N_MIDI
+        ld      de,s_modem
+        jr      .chosen
+.fmonly: cp     N_FM
+        jp      c,e_alloc
+        ld      a,N_FM
+        ld      de,s_modef
+.chosen: ld     (nseg),a
+        push    de
         call    phex8
         call    crlf
-        ; --- allocate N_SEG user segments
+        pop     de
+        call    prs
+        ; --- allocate nseg user segments
         ld      hl,phys
-        ld      b,N_SEG
+        ld      a,(nseg)
+        ld      b,a
 .alloc: push    bc
         push    hl
         xor     a                       ; user segment
@@ -92,8 +110,12 @@ body:
         inc     hl
         djnz    .alloc
         ; unused table entries -> logical 01's segment (never 1Ch-1Fh)
+        ld      a,(nseg)
+        ld      c,a
+        ld      a,32
+        sub     c
+        ld      b,a
         ld      a,(phys+1)
-        ld      b,32-N_SEG
 .fill:  ld      (hl),a
         inc     hl
         djnz    .fill
@@ -150,10 +172,12 @@ body:
         call    mk_page0
         ld      a,(phys+5)
         call    mk_page0
-    IF N_SEG > 12h
-        ld      a,(phys+12h)
+        ld      a,(nseg)
+        cp      N_MIDI
+        jr      c,.nom
+        ld      a,(phys+12h)            ; MIDI mode: logical 12h (player) also runs in page 0
         call    mk_page0
-    ENDIF
+.nom:
         ; --- FRAY.DOS -> game page 0 at 0100h
         xor     a
         ld      (cur_disk),a
@@ -170,8 +194,8 @@ body:
         call    xfer
         ld      a,(phys+3)
         call    put_p2
-        ld      a,N_SEG
-        ld      (WIN+INIT_N),a          ; init_map: LD A,N
+        ld      a,(nseg)
+        ld      (WIN+INIT_N),a          ; init_map: LD A,N (10h FM only / 13h MIDI+FM)
         ld      a,1
         call    put_p2                  ; leave DOS2's page 2 as DOS2 expects
         ld      de,s_go
@@ -734,7 +758,9 @@ die:    call    prs
 
 s_banner: db "ICITY DOS2 launcher",13,10,"$"
 s_free:  db "mapper free segments: $"
-s_need:  db " need: $"
+s_need:  db " mode segments: $"
+s_modem: db " MIDI+FM",13,10,"$"
+s_modef: db " FM only",13,10,"$"
 s_go:    db "starting",13,10,"$"
 s_nodos2: db "MSX-DOS2 required",13,10,"$"
 s_nomap: db "no mapper support routines",13,10,"$"
@@ -756,6 +782,7 @@ tag:     db "D1",0
         INCLUDE "chunks.inc"            ; chunks_D1..DU, chunk_tables
 jt:      dw 0
 nfree:   db 0
+nseg:    db 0
 phys:    ds 32,0
 cur_disk: db 0
 force1:  db 0
