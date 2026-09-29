@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """mkdos2.py - split the Illusion City disks into chunk files for the MSX-DOS2 launcher.
 
-usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch] [--fm-only]
+usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch] [--fm-only] [--font FONT.BIN]
 
 <disk dir> holds I-City(k)(1-8).dsk .. (8-8).dsk (or D1.dsk..D8.dsk) and the user disk
 (I-City(k)(U).dsk / DU.dsk / userdisk.DSK).  Output tree:
@@ -18,6 +18,9 @@ system area (0-13) and the save area (578h-587h).  Chunks tile the whole disk wi
 holes, so a request is always "file + offset" and never needs zero fill.  Overlapping
 ranges just produce more boundaries; correctness does not depend on the range list
 being complete.
+
+--font FONT.BIN replaces the Kanji ROM: patch G1 sends the game's glyph reads to the launcher, which serves them from
+ICITY\\FONT.BIN (262144 bytes, KANJI.rom layout) through a cache.  Without it the game keeps using the machine's ROM.
 
 Binary patches (PLAN_BINPATCH.md section 2) are applied to the chunk data after
 splitting and verified against the original bytes; the reassembly check then compares
@@ -103,7 +106,12 @@ def main():
         i = args.index("--merge"); merge = int(args[i+1]); del args[i:i+2]
     if "--fm-only" in args:                # without the MIDI-module patches (the launcher's FM-only mode does not need them)
         args.remove("--fm-only"); midi = False
-    PATCHES = get_patches(midi)
+    font = None
+    if "--font" in args:
+        i = args.index("--font"); font = args[i+1]; del args[i:i+2]
+        if os.path.getsize(font) != 0x40000:
+            raise SystemExit("font file must be 262144 bytes (KANJI.rom layout: 8192 glyphs x 32 bytes, level 1 then level 2)")
+    PATCHES = get_patches(midi, font=bool(font))
     if "--no-patch" in args:
         args.remove("--no-patch"); do_patch = False
     if len(args) != 2:
@@ -175,6 +183,11 @@ def main():
     inc.append("        dw " + ", ".join(f"chunks_D{n}" for n in disks))
     with open(os.path.join(out, "chunks.inc"), "w") as f: f.write("\n".join(inc) + "\n")
     with open(os.path.join(out, "manifest.json"), "w") as f: json.dump(manifest, f, indent=1)
+    if font:
+        import shutil
+        os.makedirs(os.path.join(out, "ICITY"), exist_ok=True)
+        shutil.copyfile(font, os.path.join(out, "ICITY", "FONT.BIN"))
+        print("font:", font, "-> ICITY\\FONT.BIN (patch G1 active: the Kanji ROM is not read)")
     print(f"total chunks {total_chunks}")
     # --- verification: reassemble and compare with the originals (outside patched bytes)
     bad = 0

@@ -23,6 +23,8 @@
         DEFINE PH_FF    0083h
         DEFINE RES      0084h           ; result for the game (A)
         DEFINE WIN      8000h           ; DOS2 page 2 window
+        DEFINE GLYPHW   0E980h          ; glyph wrapper in game page 3 (E947-E9FF unused by the game)
+        DEFINE GBUF_D500 0D500h         ; the game's glyph buffer
         DEFINE BDOS     0005h
         DEFINE EXTBIO   0FFCAh
         DEFINE GAME_SP  0F300h          ; loader stack until the kernel sets FAF8h
@@ -119,6 +121,66 @@ body:
 .fill:  ld      (hl),a
         inc     hl
         djnz    .fill
+        ; --- glyph cache segments (own-font support): spare = free - nseg -> use 4, 2, 1 or 0 of them
+        ld      a,(nseg)
+        ld      b,a
+        ld      a,(nfree)
+        sub     b
+        cp      4
+        jr      c,.lt4
+        ld      a,4
+        jr      .setc
+.lt4:   cp      3
+        jr      c,.setc
+        ld      a,2
+.setc:  ld      (ncache),a
+        ld      b,0                     ; ncshift = log2(ncache) for 1/2/4
+        cp      2
+        jr      c,.shd
+        inc     b
+        cp      4
+        jr      c,.shd
+        inc     b
+.shd:   ld      a,b
+        ld      (ncshift),a
+        ld      a,(ncache)
+        or      a
+        jr      z,.nocseg
+        ld      b,a
+        ld      hl,cphys
+.calloc: push   bc
+        push    hl
+        xor     a
+        ld      b,0
+        ld      hl,(jt)
+        ld      de,.cret
+        push    de
+        jp      (hl)
+.cret:  pop     hl
+        pop     bc
+        jp      c,e_alloc
+        ld      (hl),a
+        inc     hl
+        djnz    .calloc
+        ld      a,(ncache)              ; clear the tag tables (960 bytes at the start of each cache segment)
+        ld      b,a
+        ld      hl,cphys
+.cclr:  push    bc
+        push    hl
+        ld      a,(hl)
+        call    put_p2
+        ld      hl,WIN
+        ld      de,WIN+1
+        ld      bc,959
+        ld      (hl),0
+        ldir
+        pop     hl
+        inc     hl
+        pop     bc
+        djnz    .cclr
+        ld      a,1
+        call    put_p2
+.nocseg:
         ; --- game page 3 (P0): copy of DOS2 page 3, then our additions
         ld      a,(phys+0)
         call    put_p2
@@ -136,6 +198,10 @@ body:
         ldir
         ld      a,20h
         ld      (WIN+(0E8F3h-0C000h)),a
+        ld      hl,glyph_wrap_img       ; glyph fetch wrapper at E980h (file7 patch G1 jumps here)
+        ld      de,WIN+(GLYPHW-0C000h)
+        ld      bc,gw_end-glyph_wrap
+        ldir
         ld      hl,WIN+(0F37Dh-0C000h)  ; F37D: JP 0090
         ld      (hl),0C3h
         inc     hl
@@ -200,15 +266,15 @@ body:
         call    put_p2                  ; leave DOS2's page 2 as DOS2 expects
         ld      de,s_go
         call    prs
-        ; DOS2-side H.KEYI (FD9Ah, DOS2's own page 3) for the whole game session: acknowledge the MSX-MIDI
-        ; interrupt (OUT (EAh),A - what the game's MIDI service does).  The game's MIDI init arms a timer
-        ; interrupt the BIOS handler cannot acknowledge; without this every EI inside DOS2 re-enters the
-        ; BIOS handler forever (interrupt storm, growing stack, _OPEN never returns).
+        ; DOS2-side H.KEYI (FD9Ah, DOS2's own page 3) for the whole game session: JP dos_keyi (in this page-3 code).
+        ; dos_keyi acknowledges what the BIOS interrupt handler cannot: the MSX-MIDI timer (OUT (EAh),A) and the
+        ; VDP line-interrupt flag (S#1).  The game arms both; without this every EI inside DOS2 re-enters the BIOS
+        ; handler forever (interrupt storm: _OPEN/_READ never returns, growing stack or livelock).
         di
-        ld      hl,keyi_patch
-        ld      de,0FD9Ah
-        ld      bc,keyi_len
-        ldir
+        ld      a,0C3h
+        ld      (0FD9Ah),a
+        ld      hl,dos_keyi
+        ld      (0FD9Bh),hl
         ; --- enter the game environment
         di
         ld      a,(phys+0)
@@ -253,11 +319,21 @@ int_tmp:                                ; until the loader installs JP E6CD at 0
         reti
 int_tmp_len equ $-int_tmp
 e8eb_init: db 3,83h,2,83h,1,83h,0,83h
-keyi_patch:
+dos_keyi:
+        push    af
         xor     a
-        out     (0EAh),a
+        out     (0EAh),a                ; MSX-MIDI interrupt acknowledge
+        ld      a,1
+        out     (99h),a
+        ld      a,8Fh
+        out     (99h),a                 ; R#15 = 1: status register S#1
+        in      a,(99h)                 ; reading S#1 clears the line-interrupt flag FH
+        xor     a
+        out     (99h),a
+        ld      a,8Fh
+        out     (99h),a                 ; R#15 = 0 for the BIOS handler that follows
+        pop     af
         ret
-keyi_len equ $-keyi_patch
 
 ; ---------------------------------------------------------------- service (DOS2 environment)
 ; entered from the stub: SP = dos_stack, request in game page 3 (RSEC/RHL/RFN/DTA)
@@ -291,6 +367,8 @@ dos2_service:
         djnz    .ph
         ld      a,(WIN+(RFN-0C000h))
         ld      (x_fn),a
+        cp      50h                     ; 50h = glyph request (own font instead of the Kanji ROM)
+        jp      z,glyph_srv
         ld      hl,(WIN+(RSEC-0C000h))
         ld      (x_sec),hl
         ld      hl,0
@@ -490,6 +568,160 @@ xfer:
         add     hl,de
         ld      (x_sec),hl
         jp      .piece
+
+; ---------------------------------------------------------------- glyph service (own font)
+; request: HL = (H = hi, bit6 = level; L = lo) exactly what the game wrote to the Kanji ROM ports.
+; glyph index idx = (hi&3Fh)<<6 | (lo&3Fh) | (level<<12);  font file offset = idx*32 (KANJI.rom layout).
+; cache: ncache (1/2/4) segments, each 480 slots: 960 bytes of tags (idx+1, 0 = empty) then 480*32 bytes of glyphs.
+glyph_srv:
+        ld      hl,(WIN+(RHL-0C000h))
+        ld      a,h
+        and     3Fh
+        ld      l,a
+        ld      a,(WIN+(RHL-0C000h))    ; lo
+        and     3Fh
+        ld      c,a
+        ld      h,0
+        add     hl,hl                   ; (hi&3F) << 6
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        ld      a,l
+        or      c
+        ld      l,a
+        ld      a,(WIN+(RHL-0C000h)+1)  ; hi again for the level bit
+        bit     6,a
+        jr      z,.lv1
+        set     4,h
+.lv1:   ld      (g_idx),hl
+        ld      a,(ncache)
+        or      a
+        jp      z,.direct
+        dec     a
+        and     l                       ; segment = idx & (ncache-1)
+        ld      e,a
+        ld      d,0
+        ld      hl,cphys
+        add     hl,de
+        ld      a,(hl)
+        ld      (g_cseg),a
+        ld      hl,(g_idx)              ; slot = (idx >> ncshift) mod 480
+        ld      a,(ncshift)
+        or      a
+        jr      z,.nsh
+        ld      b,a
+.sh:    srl     h
+        rr      l
+        djnz    .sh
+.nsh:   ld      de,480
+.mod:   or      a
+        sbc     hl,de
+        jr      nc,.mod
+        add     hl,de
+        ld      (g_slot),hl
+        ld      a,(g_cseg)
+        call    put_p2
+        ld      hl,(g_slot)
+        add     hl,hl
+        ld      de,WIN
+        add     hl,de
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+        ld      hl,(g_idx)
+        inc     hl
+        or      a
+        sbc     hl,de
+        jr      nz,.miss
+        call    slot_addr               ; hit
+        ld      de,gbuf
+        ld      bc,32
+        ldir
+        jr      .deliver
+.miss:  call    read_glyph
+        ld      a,(g_cseg)
+        call    put_p2
+        ld      hl,(g_slot)
+        add     hl,hl
+        ld      de,WIN
+        add     hl,de
+        ld      de,(g_idx)
+        inc     de
+        ld      (hl),e
+        inc     hl
+        ld      (hl),d
+        call    slot_addr
+        ex      de,hl
+        ld      hl,gbuf
+        ld      bc,32
+        ldir
+        jr      .deliver
+.direct: call   read_glyph
+.deliver:
+        ld      a,(phys+0)              ; game page 3 back into the window, glyph -> D500h
+        call    put_p2
+        ld      hl,gbuf
+        ld      de,WIN+(GBUF_D500-0C000h)
+        ld      bc,32
+        ldir
+        xor     a
+        ld      (RES),a
+        ld      a,1
+        call    put_p2
+        jp      leave
+slot_addr:                              ; HL = WIN + 960 + slot*32
+        ld      hl,(g_slot)
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        ld      de,WIN+960
+        add     hl,de
+        ret
+read_glyph:                             ; font file -> gbuf (32 bytes at idx*32)
+        ld      a,(font_h)
+        cp      0FFh
+        jr      nz,.have
+        ld      de,s_font
+        ld      a,1                     ; read only
+        ld      c,43h                   ; _OPEN
+        call    BDOS
+        or      a
+        jp      nz,e_dos
+        ld      a,b
+        ld      (font_h),a
+.have:  ld      a,(g_idx+1)             ; offset high word = idx >> 11
+        rrca
+        rrca
+        rrca
+        and     1Fh
+        ld      e,a
+        ld      d,0
+        ld      hl,(g_idx)              ; offset low word = idx << 5
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        ld      a,(font_h)
+        ld      b,a
+        xor     a                       ; from start
+        ld      c,4Ah                   ; _SEEK
+        call    BDOS
+        or      a
+        jp      nz,e_dos
+        ld      a,(font_h)
+        ld      b,a
+        ld      de,gbuf
+        ld      hl,32
+        ld      c,48h                   ; _READ
+        call    BDOS
+        or      a
+        jp      nz,e_dos
+        ret
 
 min_hl_de:                              ; HL = min(HL,DE)
         push    hl
@@ -774,6 +1006,7 @@ s_sp:    db "$"
 s_ctx:   db " (fn sec cnt addr file): $"
 s_crlf:  db 13,10,"$"
 s_dir:   db "\\ICITY\\",0
+s_font:  db "\\ICITY\\FONT.BIN",0
 s_save:  db "SAVE",0
 s_dat:   db ".DAT",0,"$"
 tag:     db "D1",0
@@ -783,6 +1016,14 @@ tag:     db "D1",0
 jt:      dw 0
 nfree:   db 0
 nseg:    db 0
+ncache:  db 0
+ncshift: db 0
+cphys:   ds 4,0
+font_h:  db 0FFh
+g_idx:   dw 0
+g_slot:  dw 0
+g_cseg:  db 0
+gbuf:    ds 32,0
 phys:    ds 32,0
 cur_disk: db 0
 force1:  db 0
@@ -866,3 +1107,43 @@ stub_len equ stub_end-stub
         ASSERT stub_len <= 0070h
 img_end:
 
+; ---------------------------------------------------------------- glyph wrapper (runs in game page 3 at E980h)
+; replaces the body of the game's Kanji-ROM glyph reader (file7 2AB9h, patch G1 = JP E980h).
+; Same contract as the original: in HL = glyph code, out 32 bytes at D500h; the caller does not use the
+; other registers, but DE/IX/IY and the alternates are saved anyway because the DOS2 side clobbers them.
+glyph_wrap_img:
+        DISP GLYPHW
+glyph_wrap:
+        ld      a,l                     ; as the original: H = (HL*4)>>8, L unchanged
+        add     hl,hl
+        add     hl,hl
+        ld      l,a
+        push    de
+        push    ix
+        push    iy
+        ex      af,af'
+        push    af
+        ex      af,af'
+        exx
+        push    bc
+        push    de
+        push    hl
+        exx
+        ld      c,50h
+        call    0F37Dh
+        exx
+        pop     hl
+        pop     de
+        pop     bc
+        exx
+        ex      af,af'
+        pop     af
+        ex      af,af'
+        pop     iy
+        pop     ix
+        pop     de
+        ld      hl,0D520h               ; where the original INIR left HL/B/C
+        ld      bc,00D9h
+        ret
+gw_end:
+        ENT

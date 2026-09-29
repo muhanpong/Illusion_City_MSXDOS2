@@ -52,11 +52,13 @@ def P(id, secoff, orig, new):
     assert len(orig) == len(new), id
     return {"id": id, "disk": "1", "sector": s, "offset": o, "orig": bytes(orig), "new": bytes(new)}
 
+G1_ORIG = bytes.fromhex("7d29296fcb7420040ed91802" "0edb" "ed610ded690c2100d50620edb2c9")
+
 def pad(b, n):
     assert len(b) <= n, (len(b), n)
     return bytes(b) + bytes(n - len(b))
 
-def get_patches(midi):
+def get_patches(midi, font=False):
     pl = [
         # L1: loader 010E-0116.  Original: CALL E015 (reads sector 11 via F37D); CALL 035B (mapper probe,
         # writes AA/55 into every segment); LD (E8F5),A.  New: CALL init_map first so E8EB/E8F3/E8F5 are
@@ -100,6 +102,13 @@ def get_patches(midi):
         # M3: file13 40AC: index for the init data.  The init entry (014Ah, 8 sectors) sits 8 sectors before
         #     song 0 (0152h) on disk, so start the index 8 lower (0248h -> sector 014Ah).
         pl.append(P("M3", file13(0x40AC), bytes.fromhex("115002"), bytes.fromhex("114802")))
+    if font:
+        # G1: file7 2AB9h (memory address = file offset + 0100h), the game's only Kanji-ROM access, 28 bytes:
+        #     LD A,L / ADD HL,HL / ADD HL,HL / LD L,A / BIT 6,H / JR NZ / LD C,D9 / JR / LD C,DB /
+        #     OUT (C),H / DEC C / OUT (C),L / INC C / LD HL,D500 / LD B,20 / INIR / RET
+        #     -> JP E980h: the glyph wrapper the launcher installs in game page 3; it asks the launcher for the
+        #     glyph (function 50h) which reads \ICITY\FONT.BIN (same layout as KANJI.rom) through a cache.
+        pl.append(P("G1", (82 + 0x29B9 // 512, 0x29B9 % 512), G1_ORIG, pad(bytes([0xC3, 0x80, 0xE9]), 28)))
     return pl
 
 PATCHES = get_patches(False)
