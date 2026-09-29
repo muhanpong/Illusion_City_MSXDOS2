@@ -23,6 +23,7 @@
         DEFINE PH_FF    0083h
         DEFINE RES      0084h           ; result for the game (A)
         DEFINE WIN      8000h           ; DOS2 page 2 window
+        DEFINE INP      0055h           ; slot-list input in game page 0 (FCB area)
         DEFINE GLYPHW   0E980h          ; glyph wrapper in game page 3 (E947-E9FF unused by the game)
         DEFINE GBUF_D500 0D500h         ; the game's glyph buffer
         DEFINE BDOS     0005h
@@ -35,9 +36,9 @@
         DEFINE SAVE_SEC 0578h
         DEFINE EXTSEC   0600h           ; save slots 9-96 (paged slot list, patches P1-P6): sector EXTSEC + 2*(slot-8)
         DEFINE SLOTS    96              ; per disk; the save files hold them all (96KB, slot n at n*1KB)
-        DEFINE UI_SECOF   0E9DBh        ; slot-list paging entry points (patches.py P1-P6 use the same numbers)
-        DEFINE UI_NEWLIST 0E9EAh
-        DEFINE UI_FIXNO   0E9F7h
+        DEFINE UI_SECOF   0E9D8h        ; slot-list paging entry points (patches.py P1-P6 use the same numbers)
+        DEFINE UI_NEWLIST 0E9E7h
+        DEFINE UI_FIXNO   0E9F4h
         DEFINE UI_FIXSEL  00F6h
 
 ; ---------------------------------------------------------------- .COM header: move body to C000h
@@ -314,6 +315,10 @@ mk_page0:
         ld      hl,int_tmp
         ld      de,WIN+0038h
         ld      bc,int_tmp_len
+        ldir
+        ld      hl,inp_img              ; slot-list input (cbk) at 0055h: the FCB area, never used in the game world
+        ld      de,WIN+INP
+        ld      bc,inp_end-inp
         ldir
         ; 0080-0087 as the original boot sector leaves them (C080h LDIR from C0FDh):
         ; 00 00 00, VDP read port, VDP write port, DISKVE address F323h, 00.
@@ -1220,20 +1225,17 @@ img_end:
 
 ; ---------------------------------------------------------------- slot-list paging (game page 3 E9AAh-E9FFh + E951h-E95Fh)
 ; The game's slot list (file9 58C0h) shows 8 slots; file9 patches P1-P6 (patches.py, fixed addresses checked below)
-; make it show page*8+1 .. page*8+8, left/right switching pages on the disk media (SRAM / Quick stay as they are).
+; make it show page*8+1 .. page*8+8, left/right switching pages on the disk media (SRAM / Quick stay as they are): keyboard or
+; joystick 1 (inp in game page 0).
 ; Only launcher-owned bytes are used: the DOS2 kernel copy in game page 3 (e.g. Nextor's F1E8h jump table) is live.
 ui_img:
         DISP 0E9AAh
 cbk:    ld      a,(5EC3h)               ; P1 590Ah LD HL,cbk: called by the menu loop (file7 308Ah)
         cp      3                       ; medium: 1 Quick, 2 SRAM, 3 disk 1, 4 user disk
         ret     c
-        in      a,(0AAh)                ; keyboard row 8 (the BIOS selects its row itself before each scan)
-        and     0F0h
-        or      8
-        out     (0AAh),a
-        in      a,(0A9h)                ; bit 4 left, bit 7 right (0 = pressed)
+        call    INP                     ; keyboard row 8 + joystick 1 (0 = pressed)
         cpl
-        and     90h
+        and     0B0h                    ; bit 4 left, bit 7 right, bit 5 joystick right
         ld      hl,pkey
         ld      c,(hl)
         ld      (hl),a
@@ -1244,6 +1246,8 @@ cbk:    ld      a,(5EC3h)               ; P1 590Ah LD HL,cbk: called by the menu
         inc     hl                      ; page
         rla
         jr      c,.right
+        bit     6,a                     ; joystick right
+        jr      nz,.right
         and     20h
         ret     z
         ld      a,(hl)
@@ -1294,6 +1298,38 @@ ui2_end:
         ASSERT ui2_end <= 0E960h        ; TBL
         ; patches.py (P1-P6) uses these addresses
         ASSERT cbk == 0E9AAh && fixno == UI_FIXNO && fixsel == UI_FIXSEL && newlist == UI_NEWLIST && secof == UI_SECOF
+
+; ---------------------------------------------------------------- slot-list input (game page 0 0055h-007Fh)
+; The FCB area of the DOS2 page-0 image: mk_page0 puts this in every game page-0 segment (logical 03, 05, 12h).
+; A = keyboard row 8 AND joystick 1 moved to the same places: bit 4 left, bit 7 keyboard right, bit 5 joystick
+; right (keyboard bit 5 = up is masked out); 0 = pressed. PSG R15 is left on port 1 (bit 6 = 0), the other bits kept.
+inp_img:
+        DISP INP
+inp:    in      a,(0AAh)                ; keyboard row 8 (the BIOS selects its row itself before each scan)
+        and     0F0h
+        or      8
+        out     (0AAh),a
+        di                              ; the game's interrupt handler also writes the PSG
+        ld      a,15
+        out     (0A0h),a
+        in      a,(0A2h)
+        and     0BFh                    ; joystick port 1
+        out     (0A1h),a
+        ld      a,14
+        out     (0A0h),a
+        in      a,(0A2h)                ; bit 2 left, bit 3 right
+        ei
+        rlca
+        rlca                            ; left -> bit 4, right -> bit 5
+        or      0CFh
+        ld      d,a
+        in      a,(0A9h)                ; keyboard: bit 4 left, bit 7 right
+        or      6Fh
+        and     d
+        ret
+inp_end:
+        ENT
+        ASSERT inp_end <= 0080h
 
 ; ---------------------------------------------------------------- glyph wrapper (runs in game page 3 at E980h)
 ; replaces the body of the game's Kanji-ROM glyph reader (file7 2AB9h, patch G1 = JP E980h).
