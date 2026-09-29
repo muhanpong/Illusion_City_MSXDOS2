@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>일루전 시티 DSK 만들기</title>
+<title>환영도시 DSK 만들기</title>
 <style>
 :root{--bg:#f6f5f2;--card:#fff;--ink:#1d1d1f;--mute:#6b6b70;--line:#dcdad4;--acc:#1f5fd6;--acc-ink:#fff;--ok:#1a7f45;--bad:#b3261e;--warn:#8a5a00;--chip:#eceae4}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141416;--card:#1e1e21;--ink:#ececee;--mute:#9a9aa2;--line:#33333a;--acc:#6ea0ff;--acc-ink:#0b1020;--ok:#5fd18a;--bad:#ff8a80;--warn:#f0c060;--chip:#2a2a2f}}
@@ -47,7 +47,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 </head>
 <body>
 <main>
-<h1>일루전 시티 DSK 만들기</h1>
+<h1>환영도시(ILLUSION CITY) DSK 만들기</h1>
 <p class="sub">게임 디스크와 DOS 파일을 올리면 MSX-DOS2 하드디스크용 <b>.dsk</b>(또는 SD 카드에 복사할 ZIP)를 만들어 줍니다. 모든 처리는 이 브라우저 안에서만 이뤄지고 파일은 어디로도 전송되지 않습니다.</p>
 
 <section>
