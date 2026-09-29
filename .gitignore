@@ -37,3 +37,6 @@ hdtool/mkdos2/sys_ascii/
 dist/
 dist_img/
 *.zip
+hdtool/cart/sjasmplus
+hdtool/cart/*.rom
+hdtool/cart/*.lst
