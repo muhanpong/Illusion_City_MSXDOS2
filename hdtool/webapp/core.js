@@ -249,7 +249,13 @@
     const g = C.g1, o = g.sector * SEC + g.offset;
     if (!g.orig.some(h => same(disks[0], o, hexBytes(h)))) throw new Error('patch G1: the bytes on disk 1 do not match - this is not the supported release');
     disks[0].set(hexBytes(g.new), o);
-    log('FRAY.DOS ' + fray.length + ' bytes, patch G1 applied');
+    // save-list paging (file9, loaded at 4000h): 96 slots per disk
+    for (const p of C.ui) {
+      const q = C.file9Sec * SEC + p.addr - C.file9Base;
+      if (!same(disks[0], q, hexBytes(p.orig))) throw new Error('save-list patch at ' + hex4(p.addr) + ': the bytes on disk 1 do not match - this is not the supported release');
+      disks[0].set(hexBytes(p.new), q);
+    }
+    log('FRAY.DOS ' + fray.length + ' bytes, patches G1 + save-list paging (' + C.ui.length + ') applied');
     const out = [];
     for (const m of C.mappers) {
       const rom = new Uint8Array(C.romSize).fill(0xFF);
@@ -258,7 +264,11 @@
       disks.forEach((d, i) => rom.set(d, C.data + i * DISK_BYTES));
       rom.set(user, C.data + 8 * DISK_BYTES);
       rom.set(cls.font.data, C.font);
-      [disks[0], user].forEach((d, area) => { for (let n = 0; n < 8; n++) { const src = (C.saveFirst + 2 * n) * SEC; rom.set(d.subarray(src, src + 2 * SEC), C.save + (area * 8 + n) * C.saveSlot); } });
+      // save slots: groups of C.group in flash sector pairs, first sector current (header 'IC', generation 1)
+      for (let g = 0; g < 2 * C.slots / C.group; g++) rom.set([0x49, 0x43, 1, 0], C.save + g * 0x20000 + 0xC000);
+      [disks[0], user].forEach((d, area) => { for (let n = 0; n < 8; n++) {
+        const slot = area * C.slots + n, g = Math.floor(slot / C.group), p = slot % C.group, src = (C.saveFirst + 2 * n) * SEC;
+        rom.set(d.subarray(src, src + 2 * SEC), C.save + g * 0x20000 + (p >> 3) * 0x4000 + (p & 7) * 0x400); } });
       out.push({ tag: m.tag, name: m.name, rom });
     }
     log('ROM: ' + out.map(r => r.name).join(', ') + ' (' + (C.romSize >> 20) + 'MB each)');
