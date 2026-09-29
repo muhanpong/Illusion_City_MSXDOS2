@@ -5,8 +5,9 @@ disk (saves), `KANJI.rom` (to use `ICITY\FONT.BIN` instead of the machine's Kanj
 (`MSXDOS2.SYS` + `COMMAND2.COM`, or `NEXTOR.SYS`); pick the options; press *만들기*; download the `.dsk` (16MB FAT12 hard-disk image)
 or a `.zip` of the same files for an SD card.
 
-*만들 것 = 카트리지 ROM*: the same disks (+ user disk) and `KANJI.rom` (required) give the two 8MB ROMs of `hdtool/cart`
-(`ICITY_YAMA.rom` for Yamanooto, `ICITY_A16X.rom` for ASCII16-X), byte-identical to `hdtool/cart/mkcart.py`.
+*만들 것 = 카트리지 ROM*: the same disks (+ user disk) and `KANJI.rom` (required) give the two cartridge ROMs of `hdtool/cart`
+(4MB each: `ICITY_YAMA.rom` for Yamanooto, `ICITY_A16X.rom` for ASCII16-X), byte-identical to `hdtool/cart/mkcart.py`
+(core.js has a byte-identical port of the ZX0 v2.2 compressor the cartridge data uses).
 The page carries only the cartridge's 16KB boot block per mapper; FRAY.DOS is taken from the given disk 1.
 
 Built into the page: the launcher (`ICITY.COM`) and a boot sector only.  Everything else (game data, DOS files, font) is yours.

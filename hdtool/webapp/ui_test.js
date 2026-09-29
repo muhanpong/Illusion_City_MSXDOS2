@@ -32,7 +32,7 @@ const [html, zipf, userf, fontf, sysdir, outdir, mode] = process.argv.slice(2);
     console.log('cart mode: dsk-only rows hidden:', Array.from(d.querySelectorAll('.dsk-only')).every(r => r.hidden), 'rom buttons shown:', !d.getElementById('dlYAMA').hidden && !d.getElementById('dlA16X').hidden, 'make disabled:', d.getElementById('make').disabled);
   } else d.querySelector('.seg[data-opt="autoexec"] button[data-v="on"]').click(); // options: autoexec on
   d.getElementById('make').click();
-  await new Promise(r => setTimeout(r, 4000));
+  await new Promise(r => setTimeout(r, mode === 'cart' ? 60000 : 4000));
   console.log('msg:', d.getElementById('msg').textContent);
   console.log('log:', d.getElementById('log').textContent.trim().split('\n').join(' / '));
   const dl = mode === 'cart' ? ['dlYAMA', 'dlA16X'] : ['dlDsk', 'dlZip'];
