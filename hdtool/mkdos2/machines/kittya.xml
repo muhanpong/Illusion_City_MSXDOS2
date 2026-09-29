@@ -138,6 +138,7 @@
       <io base="0xDB" num="1" type="I"/>
       <level_2_via>write</level_2_via> <!-- checked by kanjitest v2.x on bsittler's, S/N 1LKSA07713 -->
       <rom>
+        <sha1>d913f35b6855be93961627e6c26d57ff26da51a4</sha1>
         <filename>fs-a1gt_kanjifont_ko.rom</filename>
       </rom>
     </Kanji>
