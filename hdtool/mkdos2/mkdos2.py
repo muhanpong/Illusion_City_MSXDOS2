@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """mkdos2.py - split the Illusion City disks into chunk files for the MSX-DOS2 launcher.
 
-usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch]
+usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch] [--midi]
 
 <disk dir> holds I-City(k)(1-8).dsk .. (8-8).dsk (or D1.dsk..D8.dsk) and the user disk
 (I-City(k)(U).dsk / DU.dsk / userdisk.DSK).  Output tree:
@@ -24,7 +24,7 @@ splitting and verified against the original bytes; the reassembly check then com
 everything except the patched bytes.
 """
 import sys, os, json, struct, glob
-from patches import PATCHES
+from patches import get_patches
 
 SEC = 512
 DISK_SECTORS = 1440
@@ -98,9 +98,12 @@ def merge_small(bounds, fixed, minlen):
 
 def main():
     args = sys.argv[1:]
-    merge = 0; do_patch = True
+    merge = 0; do_patch = True; midi = False
     if "--merge" in args:
         i = args.index("--merge"); merge = int(args[i+1]); del args[i:i+2]
+    if "--midi" in args:
+        args.remove("--midi"); midi = True
+    PATCHES = get_patches(midi)
     if "--no-patch" in args:
         args.remove("--no-patch"); do_patch = False
     if len(args) != 2:

@@ -6,7 +6,8 @@ usage: mkhd.py <out.dsk> <sys dir> [<tree dir> ...] [--mb N]
 <sys dir>  holds the DOS system files to copy to the root (NEXTOR.SYS/MSXDOS2.SYS,
            COMMAND2.COM, ...) and boot720.bin (an MSX boot sector whose Z80 code at
            1Eh-1FFh is reused; the BPB comes from mformat).
-<tree dir> directories whose *contents* are copied recursively to the root (mkdos2 output).
+<tree dir> directories whose *contents* are copied recursively to the root (mkdos2 output; chunks.inc and
+           manifest.json are skipped).
 
 Geometry: 16 heads x 32 sectors, size a whole number of cylinders (the Sunrise IDE BIOS
 needs that), FAT12 so the ASCII DOS2 2.31 kernel can read it too (PHASE0_FINDINGS section 4).
@@ -42,6 +43,7 @@ def main():
         if os.path.exists(p): run("mcopy", "-i", out, p, "::" + nm)
     for t in trees:
         for entry in sorted(os.listdir(t)):
+            if entry in ("chunks.inc", "manifest.json", "root") or entry.endswith(".dsk"): continue
             run("mcopy", "-i", out, "-s", os.path.join(t, entry), "::")
     print(run("mdir", "-i", out, "::").strip().splitlines()[-1])
     print(f"wrote {out}: {mb}MB, {cyl} cylinders, {total} sectors, FAT12 {spc} sec/cluster")

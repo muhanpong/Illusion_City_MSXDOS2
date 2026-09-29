@@ -7,7 +7,9 @@
 ;
 ; build: sjasmplus icity.asm  (needs chunks.inc from mkdos2.py in the include path)
         OUTPUT "ICITY.COM"
-        DEFINE N_SEG    16              ; logical segments the game may use (FM build); 19 for MIDI
+        IFNDEF N_SEG
+        DEFINE N_SEG    16              ; logical segments the game may use: 16 (FM build), 19 with -DN_SEG=19 (MIDI build)
+        ENDIF
         DEFINE TBL      0E960h          ; logical->physical table in game page 3 (patch K1 reads it)
         DEFINE INIT_N   0DB6h           ; LD A,N immediate inside init_map (patches.py INIT_MAP_N)
         DEFINE GSP      0E948h          ; game-side vars in game page 3 (E947-E95F unused by game)
@@ -174,6 +176,15 @@ body:
         call    put_p2                  ; leave DOS2's page 2 as DOS2 expects
         ld      de,s_go
         call    prs
+        ; DOS2-side H.KEYI (FD9Ah, DOS2's own page 3) for the whole game session: acknowledge the MSX-MIDI
+        ; interrupt (OUT (EAh),A - what the game's MIDI service does).  The game's MIDI init arms a timer
+        ; interrupt the BIOS handler cannot acknowledge; without this every EI inside DOS2 re-enters the
+        ; BIOS handler forever (interrupt storm, growing stack, _OPEN never returns).
+        di
+        ld      hl,keyi_patch
+        ld      de,0FD9Ah
+        ld      bc,keyi_len
+        ldir
         ; --- enter the game environment
         di
         ld      a,(phys+0)
@@ -218,6 +229,11 @@ int_tmp:                                ; until the loader installs JP E6CD at 0
         reti
 int_tmp_len equ $-int_tmp
 e8eb_init: db 3,83h,2,83h,1,83h,0,83h
+keyi_patch:
+        xor     a
+        out     (0EAh),a
+        ret
+keyi_len equ $-keyi_patch
 
 ; ---------------------------------------------------------------- service (DOS2 environment)
 ; entered from the stub: SP = dos_stack, request in game page 3 (RSEC/RHL/RFN/DTA)
@@ -238,9 +254,12 @@ dos2_service:
         inc     hl
         inc     hl
         push    hl
+        push    bc                      ; B is the loop counter
         ld      hl,phys
-        add     a,l
-        ld      l,a
+        ld      c,a                     ; 16-bit add: phys may straddle a 256-byte boundary
+        ld      b,0
+        add     hl,bc
+        pop     bc
         ld      a,(hl)
         ld      (de),a
         inc     de
@@ -253,10 +272,15 @@ dos2_service:
         ld      hl,0
         ld      (x_off),hl
         ld      hl,(WIN+(RHL-0C000h))   ; L = drive, H = count
+        xor     a
+        ld      (force1),a
         ld      a,l
         or      a
+        jr      z,.drv0
+        cp      80h                     ; L=80h: music read (file13 patch M2) - song data always lives on disk 1
         jp      nz,e_drive
-        ld      a,h
+        ld      (force1),a
+.drv0:  ld      a,h
         ld      (x_cnt),a
         ld      hl,(WIN+(DTA-0C000h))
         ld      (x_addr),hl
@@ -280,8 +304,19 @@ dos2_service:
         jr      nz,.rw                  ; anything else: keep the current disk
         ld      a,8                     ; 10 = user disk
 .set:   ld      (cur_disk),a
-.rw:    call    xfer
+.rw:    ld      a,(force1)
+        or      a
+        jr      z,.norm
+        ld      a,(cur_disk)            ; music read: disk 1 for this request only
+        push    af
         xor     a
+        ld      (cur_disk),a
+        call    xfer
+        pop     af
+        ld      (cur_disk),a
+        jr      .done
+.norm:  call    xfer
+.done:  xor     a
         ld      (RES),a
         ld      a,1
         call    put_p2
@@ -723,6 +758,7 @@ jt:      dw 0
 nfree:   db 0
 phys:    ds 32,0
 cur_disk: db 0
+force1:  db 0
 x_sec:   dw 0
 x_off:   dw 0
 x_addr:  dw 0
