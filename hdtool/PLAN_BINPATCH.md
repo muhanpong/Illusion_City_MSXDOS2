@@ -223,6 +223,9 @@ init_map:
 ## 9. 구현 기록
 
 - 2026-09-29: `mkdos2/` — `mkdos2.py`(M1), `patches.py`(L1·L4·K1·INIT), `icity.asm`(런처), `mkhd.py`(테스트 HD 이미지), `test/*.tcl`(openMSX 자동 시험), `build.sh`.
-- 테스트 환경: FS-A1GT(한글 Kanji ROM 기계 `kittyk`) + `SunriseIDE_Nextor` 확장(Nextor 2.1.1 ROM) + NEXTOR.SYS 2.12/COMMAND2 2.44, 16MB FAT12 이미지. ASCII DOS2 2.31용 `MSXDOS2.SYS`는 이 기계에 없어 아직 못 돌렸다.
+- 테스트 환경 두 가지, 모두 FS-A1GT(한글 Kanji ROM 기계 `kittyk`), 16MB FAT12 이미지(`mkhd.py`):
+  - `SunriseIDE_Nextor` 확장(Nextor 2.1.1 ROM) + NEXTOR.SYS 2.12 / COMMAND2 2.44
+  - `ide` 확장(Sunrise IDE BIOS 2.50, GT 내장 ASCII DOS2 커널) + MSXDOS2.SYS 2.32 / COMMAND2 2.32(사용자 제공 `MSXDOS232.zip`)
+  - 두 환경 모두 `test/start_disk2.tcl` 300초: 시작 메뉴 → 디스크 2 오프닝 → 방 장면, F37D 249회, 매퍼 위반 0, DOS 오류 0.
 - 확인된 사실: GT 매퍼 포트 읽기는 상위 3비트가 1로 읽힌다(E3h 등). openMSX 스크립트에서 `& 1Fh`가 필요하다. 런처 자체는 포트를 읽지 않는다.
 - 조각 파일은 기본 1234개(디스크당 117–175). `--merge 16`이면 507개. 아직 기본값으로 시험 중.

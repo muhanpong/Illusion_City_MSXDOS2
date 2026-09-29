@@ -33,3 +33,4 @@ hdtool/phase0/segtrace/segtrace_new.log
 hdtool/mkdos2/sys/
 hdtool/mkdos2/sjasmplus
 hdtool/mkdos2/icity.lst
+hdtool/mkdos2/sys_ascii/
