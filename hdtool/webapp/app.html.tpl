@@ -97,7 +97,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 
 <footer>
 DSK: 16MB FAT12 하드디스크 이미지 (openMSX <code>-ext ide</code> / Nextor 확장의 <code>hda</code>). ZIP: 안의 ICITY.COM 과 ICITY 폴더를 SD 카드 루트에 복사하세요.
-ROM: 4MB 이미지(4MB 이상 플래시의 Yamanooto 또는 ASCII16-X 카트리지용, 매퍼마다 파일 하나, 만드는 데 몇십 초). 카트리지만 꽂고 켜면 시작하고, 한글은 ROM 안의 폰트로 나오며(한자 ROM 불필요), 디스크 1·유저 디스크 슬롯 세이브는 카트리지 플래시에 기록됩니다. openMSX: <code>-carta ICITY_YAMA.rom -romtype Yamanooto</code>.
+ROM: 내용 4MB(4MB 이상 플래시의 Yamanooto 또는 ASCII16-X 카트리지용, 매퍼마다 파일 하나, 만드는 데 몇십 초). ASCII16-X 파일은 MiSTer 코어가 4MB를 넘는 파일만 플래시 매퍼로 인식해서 뒤를 FFh로 채운 8MB다. 카트리지만 꽂고 켜면 시작하고, 한글은 ROM 안의 폰트로 나오며(한자 ROM 불필요), 디스크 1·유저 디스크 슬롯 세이브는 카트리지 플래시에 기록됩니다. openMSX: <code>-carta ICITY_YAMA.rom -romtype Yamanooto</code>.
 게임 데이터·DOS 파일·폰트는 앱에 들어 있지 않습니다. 앱에는 런처(ICITY.COM), 부트 섹터, 카트리지 부트 코드만 들어 있습니다.
 </footer>
 </main>
@@ -180,7 +180,7 @@ async function make(){
     if (opts.target === 'cart') {
       roms = ICITY.buildCart({ assets: A, cls, keepSaves: opts.saves === 'keep', log: L });
       $('dlYAMA').disabled = false; $('dlA16X').disabled = false;
-      show('ok', '완료: 카트리지 ROM(4MB)을 내려받을 수 있습니다. 가지고 있는 카트리지 종류에 맞는 것을 고르세요.');
+      show('ok', '완료: 카트리지 ROM(Yamanooto 4MB, ASCII16-X 8MB)을 내려받을 수 있습니다. 가지고 있는 카트리지 종류에 맞는 것을 고르세요.');
       $('make').disabled = false; return;
     }
     const use = Object.assign({}, cls, { dos: {} });
