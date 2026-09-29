@@ -82,7 +82,7 @@ def zx0(block, tool, cache):
     h = hashlib.sha1(block).hexdigest()
     path = os.path.join(cache, h)
     if not os.path.exists(path):
-        with tempfile.TemporaryDirectory() as t:
+        with tempfile.TemporaryDirectory(dir=cache) as t:     # same filesystem as the cache (os.replace)
             src, dst = os.path.join(t, 'in'), os.path.join(t, 'out')
             open(src, 'wb').write(block)
             subprocess.run([tool, '-f', src, dst], check=True, capture_output=True)
