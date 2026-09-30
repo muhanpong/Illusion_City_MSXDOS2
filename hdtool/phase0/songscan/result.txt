@@ -1,0 +1,57 @@
+disk: INF records, EVT chunks, script commands ok/bad
+  1: 0 0 0/0
+  2: 31 31 2243/0
+  3: 23 23 645/0
+  4: 20 20 381/0
+  5: 25 25 558/0
+  6: 22 22 777/0
+  7: 15 15 370/0
+  8: 14 14 618/0
+
+song  sectors  disks (sources)
+   0    8   1:BC-0F+engine  2:INF+engine  3:INF+engine  4:INF+engine  5:BC-0F+INF+engine  6:INF+engine  7:INF+engine  8:BC-0F+engine
+   1    8   3:INF  4:INF  5:INF
+   2   10   3:INF  4:INF  5:INF  7:INF
+   3    8   4:INF
+   4   13   5:INF  6:INF
+   5   13   4:INF  6:INF
+   6    8   5:INF  8:INF
+   7   12   7:INF
+   8    7   2:INF  3:INF  4:INF  5:INF  6:INF  7:INF
+   9   20   2:EVT-B  8:INF
+  10    8   2:EVT-B+INF
+  11   11   
+  12    0   1:const  2:EVT-B+INF
+  13    9   2:INF
+  14    6   2:INF
+  15    8   2:INF  4:INF  5:INF
+  16    6   3:INF  4:INF  5:INF  6:INF
+  17    5   3:INF
+  18    4   
+  19    0   1:const  3:INF  5:INF  6:INF
+  20    8   2:INF  8:INF
+  21   23   2:INF  6:INF  8:INF
+  22   13   2:EVT-B  3:INF  4:INF  6:INF  7:INF  8:INF
+  23   13   2:EVT-B+INF
+  24    7   2:EVT-B  3:INF  4:EVT-B+INF  5:EVT-B+INF  6:INF  7:EVT-B+INF  8:INF
+  25    7   2:EVT-B+INF  4:INF  5:EVT-B  6:EVT-B  7:EVT-B
+  26   10   6:INF  8:INF
+  27   13   1:const  8:INF
+  28   13   1:const  2:INF  3:INF  4:INF  5:INF  6:INF  7:INF
+  29   11   1:const
+  30   18   
+  31   11   1:const  2:INF2  3:INF2  4:INF2  5:INF2  6:INF2  7:INF2  8:INF2
+  32   16   3:INF2  4:INF2  5:INF2  6:INF2  7:INF2
+  33   18   2:INF2  8:INF2
+  34   14   8:INF2
+  35   22   1:const
+  36    2   
+
+used only with disk 1 (or never): [11, 18, 29, 30, 35, 36] sectors 68
+disk 2: songs [0, 8, 9, 10, 12, 13, 14, 15, 20, 21, 22, 23, 24, 25, 28, 31, 33] sectors 179
+disk 3: songs [0, 1, 2, 8, 16, 17, 19, 22, 24, 28, 31, 32] sectors 104
+disk 4: songs [0, 1, 2, 3, 5, 8, 15, 16, 22, 24, 25, 28, 31, 32] sectors 135
+disk 5: songs [0, 1, 2, 4, 6, 8, 15, 16, 19, 24, 25, 28, 31, 32] sectors 122
+disk 6: songs [0, 4, 5, 8, 16, 19, 21, 22, 24, 25, 26, 28, 31, 32] sectors 147
+disk 7: songs [0, 2, 7, 8, 22, 24, 25, 28, 31, 32] sectors 104
+disk 8: songs [0, 6, 9, 20, 21, 22, 24, 26, 27, 31, 33, 34] sectors 153

@@ -66,3 +66,8 @@ F27Fh–F322h, F325h–F340h, F345h–F367h(게임이 쓰는 곳: F16Ah–F16Eh,
 ## 6. 관련 문서
 `hdtool/README.md`(HD판), `hdtool/PLAN_BINPATCH.md`(DOS2판 설계·측정, 13절 슬롯 확장), `hdtool/phase0/PHASE0_FINDINGS.md`,
 `hdtool/cart/HANDOFF_CART.md`(카트리지판).
+
+## 7. 진행 (2026-09-30): 한글 롬 없는 플로피판
+- 목적: FM·MIDI 모두 디스크의 글꼴만으로 동작. 결과는 `hdtool/fdd/`(mkfdd.py, README.md): 디스크 1만 패치, 표준 GT에서 글리프 약 92,000개 불일치 0.
+- 조사 도구: `phase0/songscan`(곡별 사용 디스크, 이벤트 스크립트 정적 스캔), `phase0/glyphscan`(게임이 찍는 글리프 1395개).
+- 남은 것: 엔딩(파일 14 사본 경로), 디스크 3–6·8 구간 확인, 실기.
