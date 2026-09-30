@@ -1,5 +1,5 @@
-// needs `npm i jsdom`; run: node ui_test.js icity_dsk_maker.html <zip> <userdisk> <KANJI.rom> <sys dir> <out dir> [cart]
-// (cart: choose "카트리지 ROM" and download both ROMs instead of the DSK/ZIP)
+// needs `npm i jsdom`; run: node ui_test.js icity_dsk_maker.html <zip> <userdisk> <KANJI.rom> <sys dir> <out dir> [cart|fdd]
+// (cart: choose "카트리지 ROM" and download both ROMs; fdd: choose "플로피" and download D1.dsk and the zip)
 // Runs the real page (icity_dsk_maker.html) in jsdom: drops the input files, presses the buttons, saves the downloads.
 const { JSDOM } = require('jsdom'); const fs = require('fs'), zlib = require('zlib');
 const [html, zipf, userf, fontf, sysdir, outdir, mode] = process.argv.slice(2);
@@ -26,16 +26,17 @@ const [html, zipf, userf, fontf, sysdir, outdir, mode] = process.argv.slice(2);
   const chips = Array.from(d.querySelectorAll('.chip')).map(c => c.textContent.replace(/\s+/g, ' '));
   console.log('chips:', chips.join(' | '));
   console.log('make disabled:', d.getElementById('make').disabled, 'dos row hidden:', d.getElementById('dosRow').hidden);
-  if (mode === 'cart') {
-    d.querySelector('.seg[data-opt="target"] button[data-v="cart"]').click();
+  if (mode === 'cart' || mode === 'fdd') {
+    d.querySelector('.seg[data-opt="target"] button[data-v="' + mode + '"]').click();
     await new Promise(r => setTimeout(r, 1500));
-    console.log('cart mode: dsk-only rows hidden:', Array.from(d.querySelectorAll('.dsk-only')).every(r => r.hidden), 'rom buttons shown:', !d.getElementById('dlYAMA').hidden && !d.getElementById('dlA16X').hidden, 'make disabled:', d.getElementById('make').disabled);
+    const shown = mode === 'cart' ? ['dlYAMA', 'dlA16X'] : ['dlD1', 'dlFddZip'];
+    console.log(mode + ' mode: dsk-only rows hidden:', Array.from(d.querySelectorAll('.dsk-only')).every(r => r.hidden), 'buttons shown:', shown.every(id => !d.getElementById(id).hidden), 'make disabled:', d.getElementById('make').disabled);
   } else d.querySelector('.seg[data-opt="autoexec"] button[data-v="on"]').click(); // options: autoexec on
   d.getElementById('make').click();
-  await new Promise(r => setTimeout(r, mode === 'cart' ? 60000 : 4000));
+  await new Promise(r => setTimeout(r, mode === 'cart' ? 60000 : mode === 'fdd' ? 15000 : 4000));
   console.log('msg:', d.getElementById('msg').textContent);
   console.log('log:', d.getElementById('log').textContent.trim().split('\n').join(' / '));
-  const dl = mode === 'cart' ? ['dlYAMA', 'dlA16X'] : ['dlDsk', 'dlZip'];
+  const dl = mode === 'cart' ? ['dlYAMA', 'dlA16X'] : mode === 'fdd' ? ['dlD1', 'dlFddZip'] : ['dlDsk', 'dlZip'];
   console.log('dl buttons enabled:', dl.map(id => !d.getElementById(id).disabled).join(' '));
   for (const id of dl) d.getElementById(id).click();
   await new Promise(r => setTimeout(r, 300));
