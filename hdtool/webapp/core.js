@@ -438,5 +438,44 @@
     return disks.map((data, i) => ({ n: i + 1, data }));
   }
 
-  root.ICITY = { classify, build, buildCart, buildFdd, fat12File, zx0, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
+  /* ---------------------------------------------------------------- save slots (game file 9 5944h..5A4Dh) */
+  /* Game text -> Unicode. The Korean Kanji ROM keeps JIS rows 16-40 in KS X 1001 order (EUC-KR rows B0h-C8h: the
+     Hangul syllables); rows below 16 are the JIS symbols, letters and digits. */
+  function gameText(b, o) {
+    let dk, dj; try { dk = new TextDecoder('euc-kr'); dj = new TextDecoder('shift_jis'); } catch (e) { }
+    let out = '';
+    while (o < b.length && b[o]) {
+      const h = b[o];
+      if (h < 0x80) { out += String.fromCharCode(h); o++; continue; }
+      const l = b[o + 1];
+      const j1 = ((h - (h < 0xA0 ? 0x70 : 0xB0)) << 1) - (l < 0x9F ? 1 : 0), j2 = l < 0x9F ? l - (l < 0x7F ? 0x1F : 0x20) : l - 0x7E;
+      const r = j1 - 0x20, c = j2 - 0x20;
+      try { out += r >= 16 ? (dk ? dk.decode(new Uint8Array([0xA0 + r, 0xA0 + c])) : '?') : (dj ? dj.decode(new Uint8Array([h, l])) : '?'); }
+      catch (e) { out += '?'; }
+      o += 2;
+    }
+    return out;
+  }
+  /* disk 1 + a disk with slots (disk 1 or user disk) -> [{n, valid, lv, scene, place}] for the game's 8 slots.
+     Slot n = sectors 0578h+2n (1KB): 'ILCITY' at +3F8h marks a save, +16h the scene code (3 ASCII), +277h the level.
+     The place comes from the area table of disk 1 file 10 (loaded at 8000h, table address at 8026h): 3-character
+     match first, then 2 characters, as the game's list does. */
+  function saveSlots(disk1, disk) {
+    const ft = fileTable(disk1), f10 = ft[10], base = 0x8000;
+    const f = disk1.subarray(f10[0] * SEC, (f10[0] + f10[1]) * SEC);
+    const areas = [];
+    for (let o = u16(f, 0x26) - base; o >= 0 && o + 5 <= f.length && f[o]; o += 5)
+      areas.push({ code: asciiAt(f, o, 3).replace(/\0/g, ''), name: gameText(f, u16(f, o + 3) - base) });
+    const out = [];
+    for (let n = 0; n < 8; n++) {
+      const s = disk.subarray((0x578 + 2 * n) * SEC, (0x578 + 2 * n) * SEC + 1024);
+      const valid = asciiAt(s, 0x3F8, 6) === 'ILCITY';
+      const scene = valid ? asciiAt(s, 0x16, 3) : '';
+      const a = valid && (areas.find(x => x.code === scene) || areas.find(x => x.code.slice(0, 2) === scene.slice(0, 2)));
+      out.push({ n: n + 1, valid, lv: valid ? s[0x277] : null, scene, place: a ? a.name : valid ? '(' + scene + ')' : '' });
+    }
+    return out;
+  }
+
+  root.ICITY = { classify, build, buildCart, buildFdd, saveSlots, gameText, fat12File, zx0, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
 })(typeof window !== 'undefined' ? window : globalThis);

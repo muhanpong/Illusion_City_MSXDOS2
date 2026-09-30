@@ -48,6 +48,11 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 .need td.y{color:var(--ok);font-weight:600}.need td.n{color:var(--warn);font-weight:600}
 .need tr.cur td{background:color-mix(in srgb,var(--acc) 8%,transparent)}
 .tbl{overflow-x:auto}
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:12px}
+.slots h3{font-size:13px;margin:0 0 4px;color:var(--mute);font-weight:600}
+.slots table{width:100%;border-collapse:collapse;font-size:13px}
+.slots td,.slots th{padding:3px 6px;border-bottom:1px solid var(--line);text-align:left}
+.slots th{color:var(--mute);font-weight:600}.slots td.e{color:var(--mute)}.slots td.num{text-align:right;width:3em}
 @media(max-width:520px){.row>label{min-width:100%}}
 </style>
 </head>
@@ -72,6 +77,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 </div>
 <input id="pick" type="file" multiple hidden>
 <div class="checks" id="checks"></div>
+<div class="slots" id="slots" hidden></div>
 <pre id="notes" hidden></pre>
 </section>
 
@@ -195,6 +201,7 @@ async function refresh(){
     chip('NEXTOR.SYS', hasN ? '✓' : '없음', hasN ? 'ok' : 'opt');
     chip('COMMAND2.COM', hasC ? '✓' : '없음', hasC ? 'ok' : 'opt');
   }
+  slotList();
   const notes = $('notes'); if (cls.notes.length) { notes.hidden = false; notes.textContent = cls.notes.join('\n'); } else notes.hidden = true;
   // option availability
   $('fontFile').disabled = !cls.font;
@@ -210,6 +217,26 @@ async function refresh(){
   else if (cart && !cls.font) show('bad', '카트리지 ROM을 만들려면 KANJI.rom(키티야 님의 한글 한자 ROM 파일, 262144바이트)을 올려 주세요. 만든 카트리지는 한글 한자 ROM 없는 기계에서 실행됩니다.');
   else if (fl && !cls.font) show('bad', '플로피판을 만들려면 KANJI.rom(키티야 님의 한글 한자 ROM 파일, 262144바이트)을 올려 주세요. 만든 디스크는 한글 한자 ROM 없는 기계에서 실행됩니다.');
   else if (!cart && !fl && !hasA && !hasN) show('warn', 'DOS 시스템 파일이 없습니다. 만들 수는 있지만 이미지만으로는 부팅되지 않습니다.');
+}
+function slotList(){
+  const box = $('slots'); box.innerHTML = '';
+  if (!cls || !cls.disks[1]) { box.hidden = true; return; }
+  const one = (title, disk) => {
+    let rows;
+    try { rows = ICITY.saveSlots(cls.disks[1].data, disk); } catch (e) { return; }
+    const d = document.createElement('div'), h = document.createElement('h3'), t = document.createElement('table');
+    h.textContent = title; d.appendChild(h);
+    t.innerHTML = '<tr><th class="num">NO</th><th class="num">LV</th><th>장소</th></tr>';
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      [[r.n, 'num'], [r.valid ? r.lv : '--', 'num'], [r.valid ? r.place : '미등록', r.valid ? '' : 'e']].forEach(([v, c]) => { const td = document.createElement('td'); td.textContent = v; if (c) td.className = c; tr.appendChild(td); });
+      t.appendChild(tr);
+    }
+    d.appendChild(t); box.appendChild(d);
+  };
+  one('디스크 1 세이브 (게임 목록과 같은 내용)', cls.disks[1].data);
+  if (cls.user) one('유저 디스크 세이브: ' + cls.user.name, cls.user.data);
+  box.hidden = !box.children.length;
 }
 function show(kind, text){ const m = $('msg'); m.className = kind === 'bad' ? 'bad' : kind === 'ok' ? 'ok' : ''; m.style.color = kind === 'warn' ? 'var(--warn)' : ''; m.textContent = text; }
 
