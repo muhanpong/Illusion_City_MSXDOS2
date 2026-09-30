@@ -375,5 +375,68 @@
     return out;
   }
 
-  root.ICITY = { classify, build, buildCart, fat12File, zx0, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
+  /* ---------------------------------------------------------------- floppy without a Kanji ROM (hdtool/fdd/mkfdd.py) */
+  /* opts: {assets, cls, log} -> [{n, data}] the eight game disks, disk 1 patched (font on the disk) */
+  function buildFdd(opts) {
+    const F = opts.assets.fdd, log = opts.log || (() => { }), cls = opts.cls;
+    const disks = [];
+    for (let n = 1; n <= 8; n++) { const d = cls.disks[n]; if (!d) throw new Error('game disk ' + n + ' (IPROJ0' + n + ') is missing'); disks.push(d.data.slice()); }
+    if (!cls.font) throw new Error('the floppy version needs the font (KANJI.rom, 262144 bytes)');
+    if (cls.font.data.length !== 262144) throw new Error('font: expected 262144 bytes');
+    const K = cls.font.data, glyphs = F.glyphs, BLK = F.blk, d1 = disks[0];
+    // font images (mkfdd.font_images): segment 1Fh from 8000h (code, BST, LOWS, BTAB, blocks up to BUF), 1Eh from seg1e
+    const bst = new Array(33).fill(0);
+    for (const g of glyphs) bst[(g >> 8) + 1]++;
+    for (let i = 0; i < 32; i++) bst[i + 1] += bst[i];
+    const blocks = [];
+    for (let i = 0; i < glyphs.length; i += BLK) {
+      const part = glyphs.slice(i, i + BLK), raw = new Uint8Array(part.length * 32);
+      part.forEach((g, k) => raw.set(K.subarray(g * 32, g * 32 + 32), k * 32));
+      blocks.push(zx0(raw));
+    }
+    const code = b64(F.code), tab = F.DATA - 0x8000 + 66 + glyphs.length;
+    const f1 = new Uint8Array(F.BUF - 0x8000), e1 = new Uint8Array(0x8000 - F.seg1e);
+    f1.set(code, 0);
+    bst.forEach((v, i) => { f1[F.DATA - 0x8000 + 2 * i] = v & 0xFF; f1[F.DATA - 0x8000 + 2 * i + 1] = v >> 8; });
+    glyphs.forEach((g, i) => { f1[F.DATA - 0x8000 + 66 + i] = g & 0xFF; });
+    let n1f = tab + 3 * blocks.length, n1e = 0;
+    blocks.forEach((b, i) => {
+      let addr, seg;
+      if (!n1e && 0x8000 + n1f + b.length <= F.BUF) { addr = 0x8000 + n1f; seg = 0; f1.set(b, n1f); n1f += b.length; }
+      else { if (n1e + b.length > e1.length) throw new Error('font does not fit in segment 1Eh'); addr = F.seg1e + n1e; seg = 1; e1.set(b, n1e); n1e += b.length; }
+      f1.set([addr & 0xFF, addr >> 8, seg], tab + 3 * i);
+    });
+    const n1 = Math.ceil(n1f / SEC), n2 = Math.ceil(n1e / SEC);
+    if (n1 + n2 > F.fontmax) throw new Error('font needs ' + (n1 + n2) + ' sectors, ' + F.fontmax + ' free');
+    // patches (mkfdd.patch_disk1), each checked against the original bytes
+    const w = v => [v & 0xFF, (v >> 8) & 0xFF];
+    const patch = (off, orig, neu, what) => {
+      if (!same(d1, off, orig)) throw new Error(what + ': the bytes on disk 1 do not match - this is not the supported release');
+      d1.set(neu, off);
+    };
+    const loader = b64(F.loader).slice(), base = 0x0DA2, fray = 14 * SEC, frayLen = 0xCA2;
+    loader[F.n1imm + 1 - base] = n1;
+    loader.set(w(F.fontsec + n1), F.n2sec + 1 - base);
+    loader[F.n2imm + 1 - base] = n2;
+    if (loader.length + frayLen > 7 * SEC) throw new Error('FRAY.DOS would outgrow its 7 sectors');
+    const enc = s => new TextEncoder().encode(s);
+    patch(7 * SEC, enc('FRAY    DOS'), enc('FRAY    DOS'), 'directory');
+    patch(7 * SEC + 28, [...w(frayLen), 0, 0], [...w(frayLen + loader.length), 0, 0], 'FRAY.DOS size');
+    patch(fray + 0x06, [0x01, 0x47, 0x09], [0x01, ...w(0x947 + F.STUBLEN)], 'FRAY.DOS 0106h');
+    patch(fray + 0x54, [0xC3, 0x00, 0xE0], [0xC3, ...w(F.init)], 'FRAY.DOS 0154h');
+    d1.set(loader, fray + frayLen);
+    patch(82 * SEC + 0x2AB9 - 0x100, [0x7D, 0x29, 0x29], [0xC3, ...w(F.g7)], 'file 7 2AB9h');
+    patch(238 * SEC + 0xADFE - 0x8000, [0x7D, 0x29, 0x29], [0xC3, ...w(F.g14)], 'file 14 ADFEh');
+    patch(228 * SEC + 0x113, hexBytes('3a2443c6102e20cdee50'), hexBytes('3a244321d00300000000'), 'file 13 4113h');
+    patch(228 * SEC + 0x245, hexBytes('c6102e20cdee50'), hexBytes('21d00300000000'), 'file 13 4245h');
+    const area = d1.subarray(F.fontsec * SEC, (F.fontsec + F.fontmax) * SEC);
+    if (area.some(b => b !== area[0])) throw new Error('sectors 550h-577h of disk 1 are not empty - this is not the supported release');
+    area.fill(0, 0, (n1 + n2) * SEC);
+    d1.set(f1.subarray(0, n1f), F.fontsec * SEC);
+    d1.set(e1.subarray(0, n1e), (F.fontsec + n1) * SEC);
+    log(glyphs.length + ' glyphs in ' + blocks.length + ' blocks, font sectors 550h+' + n1 + '+' + n2 + ', FRAY.DOS +' + loader.length + ' bytes');
+    return disks.map((data, i) => ({ n: i + 1, data }));
+  }
+
+  root.ICITY = { classify, build, buildCart, buildFdd, fat12File, zx0, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
 })(typeof window !== 'undefined' ? window : globalThis);
