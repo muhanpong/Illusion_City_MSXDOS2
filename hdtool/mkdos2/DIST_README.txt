@@ -1,6 +1,10 @@
 환영도시(ILLUSION CITY) (한글) - MSX-DOS2 하드디스크판
 ============================================
 
+한글 번역, 한글 글꼴(KANJI.rom), 인코딩: 키티야 님
+  이 판은 키티야 님의 작업에 감사하는 마음으로 만들었습니다. ICITY\FONT.BIN 의 글자는 키티야 님의 글꼴입니다.
+  한글화 글: https://blog.naver.com/kkitty5425/222619726741
+
 필요한 것
   - MSX turbo R (FS-A1GT) 512KB, MSX-DOS2 (내장 ASCII DOS2 또는 Nextor) 로 부팅되는 SD/CF/IDE 저장장치
   - 빈 공간 약 10MB, 한자 ROM은 필요 없음 (ICITY\FONT.BIN 을 사용)

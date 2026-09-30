@@ -4,9 +4,9 @@
 ;   PART=1  loader.bin: page-3 stub (runs at E947h, copied there with the kernel image) + boot-time loader (runs in page
 ;           0 right after it). Both are appended to FRAY.DOS; the loader's kernel copy (0106h LD BC) grows by the stub,
 ;           and 0154h JP E000h becomes JP init.
-;   PART=2  font1f.bin (mapper segment 1Fh at 8000h: lookup code, index, block table, first compressed blocks) and
-;           font1e.bin (the rest of the blocks: segment 1Eh from offset 2000h, seen at 6000h when mapped in page 1).
-;           Both go to disk 1 from sector FONTSEC (unused by the game, see HANDOFF).
+;   PART=2  font1f.bin: the lookup code at 8000h of mapper segment 1Fh. mkfdd.py adds the index, block table and the
+;           first compressed blocks (1Fh image) and the rest of the blocks (segment 1Eh from offset 2000h, seen at 6000h
+;           when mapped in page 1); both go to disk 1 from sector FONTSEC (unused by the game, see README).
 ;
 ; Memory: the game's sector cache (file 13) is cut to end at cache index 3D0h (patches in mkfdd.py), which leaves
 ; segment 1Fh and 1Eh from offset 2000h free in both sound modes (MIDI: songs end at index 3C9h, 6 cache sectors).
@@ -15,7 +15,11 @@
 ; ZX0-compressed; a glyph request decompresses its block into BUF (kept while the next glyph is in the same block).
 ; Machines with fewer than 32 mapper segments keep using the Kanji ROM (FLAG stays 0).
 
-        INCLUDE "fdd_layout.inc"        ; mkfdd.py: FONTSEC, N1, N2, BLK, and PART 2 data
+        INCLUDE "fdd_def.inc"           ; mkfdd.py: PART, BLK (glyphs per block), NGLYPH, NBLK
+; The font data is not assembled: mkfdd.py (and the web
+; app, same rules) puts BST/LOWS/BTAB/blocks at DATA and fills in the sector numbers at n1imm/n2sec/n2imm.
+FONTSEC equ     550h
+DATA    equ     8140h                   ; PART 2: tables and the first blocks follow the code
 
 E030    equ 0E030h                      ; kernel: map segment A in page B, old mapping left on the caller's stack
 E033    equ 0E033h                      ; kernel: restore the mapping E030 left
@@ -85,29 +89,29 @@ STUBLEN equ     stubend-STUB
 ; boot: runs in page 0 just before the loader's JP E000h (kernel, mapper table and interrupt handler are set up)
 init:   ld      a,(0E8F3h)              ; segments of the primary mapper
         cp      20h
-        jr      c,.go
+        jr      c,igo
         ld      a,1Fh
         ld      b,2
         call    E030
         ld      de,8000h
         ld      hl,FONTSEC
-        ld      b,N1
+n1imm:  ld      b,0                     ; sectors for segment 1Fh (mkfdd.py)
         call    rd
         call    E033
         ld      a,1Eh
         ld      b,2
         call    E030
         ld      de,0A000h               ; segment 1Eh offset 2000h
-        ld      hl,FONTSEC+N1
-        ld      b,N2
+n2sec:  ld      hl,0                    ; FONTSEC + sectors for 1Fh (mkfdd.py)
+n2imm:  ld      b,0                     ; sectors for segment 1Eh (mkfdd.py)
         call    rd
         call    E033
         ld      a,(ok)
         cp      2
-        jr      nz,.go
+        jr      nz,igo
         ld      a,1
         ld      (FLAG),a
-.go:    jp      0E000h
+igo:    jp      0E000h
 ; DE = DTA, HL = first sector, B = count: disk 1 (drive A), counts successful reads in ok
 rd:     push    bc
         push    hl
@@ -129,7 +133,7 @@ ok:     db      0
 
         IF PART == 2
 ; ---------------------------------------------------------------------------------------------------------------
-        OUTPUT "font1f.bin"
+        OUTPUT "font1f.bin"                 ; code only; mkfdd.py appends the data
         ORG     8000h
 BUF     equ     0C000h-BLK*32           ; decompressed block (not on disk)
 ; (VIDX) -> 32 bytes at TEMP. Glyph index = (H & 7Fh)*64 + (L & 3Fh) (KANJI.rom layout): bucket = index >> 8,
@@ -241,10 +245,9 @@ CUR:    db      0FFh                    ; block now in BUF
 SRC:    dw      0
 VIDX    equ     STUB+1                  ; PART 1 layout
 TEMP    equ     STUB+5
-        FONTDATA                        ; fdd_layout.inc: BST, LOWS, BTAB, blocks in 1Fh
-        ASSERT  $ <= BUF
-        OUTPUT "font1e.bin"
-        ORG     6000h                   ; segment 1Eh offset 2000h mapped in page 1
-        FONTDATA2
-        ASSERT  $ <= 8000h
+        ASSERT  $ <= DATA
+BST     equ     DATA                    ; 33 words: LOWS index where each bucket (glyph number >> 8) starts
+LOWS    equ     BST+66                  ; NGLYPH bytes: glyph number & FFh, glyphs sorted
+BTAB    equ     LOWS+NGLYPH             ; NBLK x (word address, byte 0 = segment 1Fh in page 2 / 1 = segment 1Eh in page 1)
+BLOCKS  equ     BTAB+3*NBLK             ; ZX0 blocks: in 1Fh up to BUF, the rest in 1Eh from 6000h (offset 2000h)
         ENDIF

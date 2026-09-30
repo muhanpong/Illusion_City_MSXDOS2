@@ -13,27 +13,121 @@ What changes on disk 1 (all checked against the original bytes first):
   file 14   ADFEh (the ending's copy of that routine)  -> JP g14
   file 13   4113h / 4245h: sector cache ends at index 3D0h in both sound modes (was (mapper size)*32), which frees
             segment 1Fh and segment 1Eh from offset 2000h (MIDI songs end at 3C9h)
-  sectors FONTSEC..: the font (fdd.asm PART 2), in the unused area 550h-577h (the INF catalogue ends at 54Dh, the save
-            slots start at 578h)
+  sectors 550h..: the font, in the unused area 550h-577h (the INF catalogue ends at 54Dh, the save slots start at 578h)
+The glyph list is ../phase0/glyphscan/glyphset.json (the supported release). The web app (hdtool/webapp, buildFdd) makes
+the same disk 1 from the same rules: assemble() output goes to its assets, patch_disk1() is ported line by line.
 """
+import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', 'cart'))
-sys.path.insert(0, os.path.join(HERE, '..', 'phase0', 'glyphscan'))
 import mkcart          # noqa: E402  (ZX0 compressor, sjasmplus path)
-import glyphscan       # noqa: E402
 
 DISK = 737280
+SEC = 512
 FONTSEC = 0x550
 FONTMAX = 0x578 - FONTSEC          # 40 sectors up to the save slots
 BLK = 40                           # glyphs per compressed block (buffer BLK*32 bytes)
-CODE_EST = 0x140                   # fdd.asm PART 2 code before the data (ASSERTs catch a wrong estimate)
+SEG1E = 0x6000                     # segment 1Eh offset 2000h, mapped in page 1
 FRAY_SEC, FRAY_LEN = 14, 0xCA2
-F7_SEC, F13_SEC, F14_SEC = 82, 228, 238
+GLYPHS = os.path.join(HERE, '..', 'phase0', 'glyphscan', 'glyphset.json')
+
+
+def glyph_list():
+    return json.load(open(GLYPHS))['glyphs']
+
+
+def assemble(nglyph):
+    """-> dict: loader (FRAY.DOS tail), code (segment 1Fh from 8000h), symbols; all independent of the font bytes"""
+    nblk = -(-nglyph // BLK)
+    out = {}
+    with tempfile.TemporaryDirectory() as tmp:
+        for part in (1, 2):
+            open(os.path.join(tmp, 'fdd_def.inc'), 'w').write(
+                f'PART equ {part}\nBLK equ {BLK}\nNGLYPH equ {nglyph}\nNBLK equ {nblk}\n')
+            r = subprocess.run([mkcart.SJASM, '--nologo', '--msg=war', '--sym=fdd.sym', f'-I{tmp}', f'-I{HERE}',
+                                os.path.join(HERE, 'fdd.asm')], cwd=tmp, capture_output=True, text=True)
+            if r.returncode:
+                sys.exit(r.stdout + r.stderr)
+            for m in re.finditer(r'^(\w+):\s+EQU\s+0x([0-9A-Fa-f]+)', open(os.path.join(tmp, 'fdd.sym')).read(), re.M):
+                out[m.group(1)] = int(m.group(2), 16)
+        out['loader'] = open(os.path.join(tmp, 'loader.bin'), 'rb').read()
+        out['code'] = open(os.path.join(tmp, 'font1f.bin'), 'rb').read()
+    out.update(blk=BLK, nglyph=nglyph, nblk=nblk, fontsec=FONTSEC, fontmax=FONTMAX, seg1e=SEG1E)
+    return out
+
+
+def font_images(K, glyphs, A, zx0):
+    """-> (segment 1Fh image from 8000h, segment 1Eh image from SEG1E). zx0(bytes) -> bytes."""
+    bst = [0] * 33
+    for g in glyphs:
+        bst[(g >> 8) + 1] += 1
+    for i in range(32):
+        bst[i + 1] += bst[i]
+    blocks = [zx0(b''.join(K[g * 32:g * 32 + 32] for g in glyphs[i:i + BLK])) for i in range(0, len(glyphs), BLK)]
+    img1f = bytearray(A['code'].ljust(A['DATA'] - 0x8000, b'\0'))
+    for v in bst:
+        img1f += bytes([v & 0xFF, v >> 8])
+    img1f += bytes(g & 0xFF for g in glyphs)
+    tab = len(img1f)
+    img1f += bytes(3 * len(blocks))
+    img1e = bytearray()
+    for i, b in enumerate(blocks):
+        if not img1e and 0x8000 + len(img1f) + len(b) <= A['BUF']:
+            addr, seg = 0x8000 + len(img1f), 0
+            img1f += b
+        else:
+            addr, seg = SEG1E + len(img1e), 1
+            img1e += b
+        img1f[tab + 3 * i:tab + 3 * i + 3] = bytes([addr & 0xFF, addr >> 8, seg])
+    if SEG1E + len(img1e) > 0x8000:
+        raise ValueError('font does not fit in segment 1Eh')
+    return bytes(img1f), bytes(img1e)
+
+
+def patch(disk, off, orig, new, what):
+    if bytes(disk[off:off + len(orig)]) != orig:
+        raise ValueError(f'{what}: the bytes on disk 1 do not match - this is not the supported release')
+    disk[off:off + len(new)] = new
+
+
+def patch_disk1(d1, K, glyphs, A, zx0):
+    """patch disk 1 (bytearray) in place; returns a one-line summary"""
+    w = lambda v: bytes([v & 0xFF, v >> 8])
+    img1f, img1e = font_images(K, glyphs, A, zx0)
+    n1, n2 = -(-len(img1f) // SEC), -(-len(img1e) // SEC)
+    if n1 + n2 > FONTMAX:
+        raise ValueError(f'font needs {n1 + n2} sectors, {FONTMAX} free')
+    loader = bytearray(A['loader'])
+    base = 0x0DA2                                         # page-0 address of the loader's first byte
+    loader[A['n1imm'] + 1 - base] = n1
+    loader[A['n2sec'] + 1 - base:A['n2sec'] + 3 - base] = w(FONTSEC + n1)
+    loader[A['n2imm'] + 1 - base] = n2
+    fray = FRAY_SEC * SEC
+    if len(loader) + FRAY_LEN > 7 * SEC:
+        raise ValueError('FRAY.DOS would outgrow its 7 sectors')
+    patch(d1, 7 * SEC, b'FRAY    DOS', b'FRAY    DOS', 'directory')
+    patch(d1, 7 * SEC + 28, w(FRAY_LEN) + b'\0\0', w(FRAY_LEN + len(loader)) + b'\0\0', 'FRAY.DOS size')
+    patch(d1, fray + 0x0006, b'\x01\x47\x09', b'\x01' + w(0x947 + A['STUBLEN']), 'FRAY.DOS 0106h')
+    patch(d1, fray + 0x0054, b'\xc3\x00\xe0', b'\xc3' + w(A['init']), 'FRAY.DOS 0154h')
+    d1[fray + FRAY_LEN:fray + FRAY_LEN + len(loader)] = loader
+    patch(d1, 82 * SEC + 0x2AB9 - 0x100, b'\x7d\x29\x29', b'\xc3' + w(A['g7']), 'file 7 2AB9h')
+    patch(d1, 238 * SEC + 0xADFE - 0x8000, b'\x7d\x29\x29', b'\xc3' + w(A['g14']), 'file 14 ADFEh')
+    patch(d1, 228 * SEC + 0x113, bytes.fromhex('3a2443c6102e20cdee50'), bytes.fromhex('3a244321d00300000000'),
+          'file 13 4113h')
+    patch(d1, 228 * SEC + 0x245, bytes.fromhex('c6102e20cdee50'), bytes.fromhex('21d00300000000'), 'file 13 4245h')
+    area = bytes(d1[FONTSEC * SEC:(FONTSEC + FONTMAX) * SEC])
+    if area.count(area[0]) != len(area):
+        raise ValueError('sectors 550h-577h of disk 1 are not empty - this is not the supported release')
+    img = img1f.ljust(n1 * SEC, b'\0') + img1e.ljust(n2 * SEC, b'\0')
+    d1[FONTSEC * SEC:FONTSEC * SEC + len(img)] = img
+    return (f'{len(glyphs)} glyphs in {-(-len(glyphs) // BLK)} blocks, font sectors {FONTSEC:03X}h+{n1}+{n2}, '
+            f'FRAY.DOS +{len(loader)} bytes')
 
 
 def read_disks(path):
@@ -54,54 +148,11 @@ def read_disks(path):
     return out
 
 
-def patch(disk, off, orig, new, what):
-    if bytes(disk[off:off + len(orig)]) != orig:
-        sys.exit(f'{what}: unexpected bytes {bytes(disk[off:off + len(orig)]).hex()} (want {orig.hex()})')
-    disk[off:off + len(new)] = new
-
-
-def asm(tmp, part, inc):
-    open(os.path.join(tmp, 'fdd_layout.inc'), 'w').write(inc)
-    r = subprocess.run([mkcart.SJASM, f'-DPART={part}', '--nologo', '--msg=war', '--sym=fdd.sym',
-                        '--lst=fdd.lst', f'-I{tmp}', f'-I{HERE}', os.path.join(HERE, 'fdd.asm')],
-                       cwd=tmp, capture_output=True, text=True)
-    if r.returncode:
-        sys.exit(r.stdout + r.stderr)
-    sym = {}
-    for line in open(os.path.join(tmp, 'fdd.sym')):
-        if ':' in line and 'EQU' in line.upper():
-            name, val = line.split(':', 1)
-            sym[name.strip()] = int(val.split()[-1].rstrip('hH'), 16)
-    return sym
-
-
-def font_layout(K, glyphs):
-    """-> (FONTDATA, FONTDATA2 macro text)"""
+def zx0_cached():
     tool = mkcart.zx0tool()
     cache = os.path.join(os.path.expanduser('~'), '.cache', 'icity_zx0', 'v22')
     os.makedirs(cache, exist_ok=True)
-    buckets = [0] * 33
-    for g in glyphs:
-        buckets[(g >> 8) + 1] += 1
-    for i in range(32):
-        buckets[i + 1] += buckets[i]
-    lows = [g & 0xFF for g in glyphs]
-    blocks = [mkcart.zx0(b''.join(K[g * 32:g * 32 + 32] for g in glyphs[i:i + BLK]), tool, cache)
-              for i in range(0, len(glyphs), BLK)]
-    tables = 2 * 33 + len(lows) + 3 * len(blocks)
-    cap1 = 0xC000 - BLK * 32 - (0x8000 + CODE_EST + tables)
-    seg, used = [], 0
-    for b in blocks:
-        s = 0 if used + len(b) <= cap1 and not (seg and seg[-1]) else 1
-        seg.append(s)
-        used += len(b) if s == 0 else 0
-    db = lambda b: ''.join(f'        db {",".join(str(x) for x in b[i:i + 32])}\n' for i in range(0, len(b), 32))
-    m1 = ('        MACRO FONTDATA\nBST:\n' + ''.join(f'        dw {x}\n' for x in buckets) + 'LOWS:\n' + db(lows) +
-          'BTAB:\n' + ''.join(f'        dw blk{i}\n        db {s}\n' for i, s in enumerate(seg)) +
-          ''.join(f'blk{i}:\n' + db(b) for i, b in enumerate(blocks) if seg[i] == 0) + '        ENDM\n')
-    m2 = ('        MACRO FONTDATA2\n' + ''.join(f'blk{i}:\n' + db(b) for i, b in enumerate(blocks) if seg[i] == 1) +
-          '        ENDM\n')
-    return m1 + m2, sum(map(len, blocks)), seg.count(1)
+    return lambda b: mkcart.zx0(b, tool, cache)
 
 
 def main():
@@ -111,60 +162,15 @@ def main():
     K = open(sys.argv[2], 'rb').read()
     if len(K) != 262144:
         sys.exit('KANJI.rom must be 262144 bytes')
-    codes, _ = glyphscan.scan(sys.argv[1] if all(os.path.exists(os.path.join(sys.argv[1], f'D{n}.dsk'))
-                                                 for n in range(1, 9)) else _dump(disks))
-    glyphs = sorted({glyphscan.glyph(c) for c in codes if K[glyphscan.glyph(c) * 32:glyphscan.glyph(c) * 32 + 32]
-                     .count(0) != 32})
-    data, packed, n1e = font_layout(K, glyphs)
-    d1 = disks[0]
-    with tempfile.TemporaryDirectory() as tmp:
-        base = f'        DEFINE BLK {BLK}\n'
-        asm(tmp, 2, base + 'FONTSEC equ 0\nN1 equ 0\nN2 equ 0\n' + data)
-        f1f = open(os.path.join(tmp, 'font1f.bin'), 'rb').read()
-        f1e = open(os.path.join(tmp, 'font1e.bin'), 'rb').read()
-        n1, n2 = -(-len(f1f) // 512), -(-len(f1e) // 512)
-        if n1 + n2 > FONTMAX:
-            sys.exit(f'font needs {n1 + n2} sectors, {FONTMAX} free')
-        sym = asm(tmp, 1, base + f'FONTSEC equ {FONTSEC}\nN1 equ {n1}\nN2 equ {n2}\n' + data)
-        loader = open(os.path.join(tmp, 'loader.bin'), 'rb').read()
-    w = lambda v: bytes([v & 0xFF, v >> 8])
-    # FRAY.DOS: append stub + loader, longer kernel copy, JP init
-    fray = FRAY_SEC * 512
-    if len(loader) + FRAY_LEN > 7 * 512:
-        sys.exit('FRAY.DOS would outgrow its 7 sectors')
-    patch(d1, fray + FRAY_LEN, bytes(d1[fray + FRAY_LEN:fray + FRAY_LEN + len(loader)]), loader, 'FRAY.DOS tail')
-    patch(d1, fray + 0x0106 - 0x100, b'\x01\x47\x09', b'\x01' + w(0x947 + sym['STUBLEN']), 'FRAY.DOS 0106h')
-    patch(d1, fray + 0x0154 - 0x100, b'\xc3\x00\xe0', b'\xc3' + w(sym['init']), 'FRAY.DOS 0154h')
-    dirent = 7 * 512                                     # root directory, first entry = FRAY.DOS
-    patch(d1, dirent, b'FRAY    DOS', b'FRAY    DOS', 'directory')
-    patch(d1, dirent + 28, w(FRAY_LEN) + b'\0\0', w(FRAY_LEN + len(loader)) + b'\0\0', 'FRAY.DOS size')
-    # the game's glyph reads
-    patch(d1, F7_SEC * 512 + 0x2AB9 - 0x100, b'\x7d\x29\x29', b'\xc3' + w(sym['g7']), 'file 7 2AB9h')
-    patch(d1, F14_SEC * 512 + 0xADFE - 0x8000, b'\x7d\x29\x29', b'\xc3' + w(sym['g14']), 'file 14 ADFEh')
-    # sector cache end 3C8h (file 13 at 4000h)
-    patch(d1, F13_SEC * 512 + 0x113, bytes.fromhex('3a2443c6102e20cdee50'), bytes.fromhex('3a2443' '21d003' '00000000'),
-          'file 13 4113h')
-    patch(d1, F13_SEC * 512 + 0x245, bytes.fromhex('c6102e20cdee50'), bytes.fromhex('21d003' '00000000'), 'file 13 4245h')
-    # font
-    area = bytes(d1[FONTSEC * 512:(FONTSEC + n1 + n2) * 512])
-    if area.count(area[0]) != len(area):
-        sys.exit('font area on disk 1 is not empty')
-    img = f1f.ljust(n1 * 512, b'\0') + f1e.ljust(n2 * 512, b'\0')
-    d1[FONTSEC * 512:FONTSEC * 512 + len(img)] = img
-    out = sys.argv[3]
-    os.makedirs(out, exist_ok=True)
+    glyphs = glyph_list()
+    A = assemble(len(glyphs))
+    try:
+        print(patch_disk1(disks[0], K, glyphs, A, zx0_cached()))
+    except ValueError as e:
+        sys.exit(str(e))
+    os.makedirs(sys.argv[3], exist_ok=True)
     for n, d in enumerate(disks, 1):
-        open(os.path.join(out, f'D{n}.dsk'), 'wb').write(d)
-    print(f'{len(glyphs)} glyphs, {packed} bytes in {-(-len(glyphs) // BLK)} blocks ({n1e} in segment 1Eh); '
-          f'font sectors {FONTSEC:03X}h+{n1}+{n2}; FRAY.DOS +{len(loader)} bytes '
-          f'(stub {sym["STUBLEN"]}, g7 {sym["g7"]:04X}h, g14 {sym["g14"]:04X}h, init {sym["init"]:04X}h)')
-
-
-def _dump(disks):
-    t = tempfile.mkdtemp()
-    for n, d in enumerate(disks, 1):
-        open(os.path.join(t, f'D{n}.dsk'), 'wb').write(d)
-    return t
+        open(os.path.join(sys.argv[3], f'D{n}.dsk'), 'wb').write(d)
 
 
 if __name__ == '__main__':

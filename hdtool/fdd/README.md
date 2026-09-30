@@ -1,6 +1,10 @@
 # 플로피판: 한글 한자 ROM 없이 (디스크 1 패치)
 
+한글 번역·한글 글꼴(KANJI.rom)·인코딩은 키티야 님의 작업이며, 이 판은 키티야 님께 드리는 헌정 작업이다. 디스크 1에 넣는 글꼴은 키티야 님의 KANJI.rom에서 가져온다. (한글화 글: https://blog.naver.com/kkitty5425/222619726741)
+
 `mkfdd.py <원본 디스크 8장 폴더> <KANJI.rom> <출력 폴더>` → 디스크 1만 바뀐 `D1.dsk`–`D8.dsk`. 유저 디스크는 그대로 쓴다.
+웹 도구(`hdtool/webapp/icity_dsk_maker.html`, 만들 것 = 플로피)가 같은 디스크 1을 만든다(`test_fdd.js`로 바이트 일치 확인).
+글리프 목록은 `hdtool/phase0/glyphscan/glyphset.json`(지원하는 판본), 글꼴 데이터는 8140h부터(코드와 무관하게 고정).
 FM·MIDI 두 모드 모두, 한글 롬이 없는 표준 FS-A1GT에서 게임 글자가 디스크 1의 글꼴로 나온다.
 
 ## 구성
