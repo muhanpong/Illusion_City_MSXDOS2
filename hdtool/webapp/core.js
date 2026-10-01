@@ -328,13 +328,17 @@
     const g = C.g1, o = g.sector * SEC + g.offset;
     if (!g.orig.some(h => same(disks[0], o, hexBytes(h)))) throw new Error('patch G1: the bytes on disk 1 do not match - this is not the supported release');
     disks[0].set(hexBytes(g.new), o);
+    // patch G2: the ending intro's own copy of the routine (file 14 ADFEh)
+    const g2 = C.g2, o2 = g2.sector * SEC + g2.offset;
+    if (!g2.orig.some(h => same(disks[0], o2, hexBytes(h)))) throw new Error('patch G2: the bytes on disk 1 do not match - this is not the supported release');
+    disks[0].set(hexBytes(g2.new), o2);
     // save-list paging (file9, loaded at 4000h): 96 slots per disk
     for (const p of C.ui) {
       const q = C.file9Sec * SEC + p.addr - C.file9Base;
       if (!same(disks[0], q, hexBytes(p.orig))) throw new Error('save-list patch at ' + hex4(p.addr) + ': the bytes on disk 1 do not match - this is not the supported release');
       disks[0].set(hexBytes(p.new), q);
     }
-    log('FRAY.DOS ' + fray.length + ' bytes, patches G1 + save-list paging (' + C.ui.length + ') applied');
+    log('FRAY.DOS ' + fray.length + ' bytes, patches G1 + G2 + save-list paging (' + C.ui.length + ') applied');
     // sectors of disk 1-8 + user disk: duplicates once, each ZX0 (raw when not smaller), none across an 8KB bank;
     // table: low word at tblLo + 2i, high byte at tblHi + i (offset | raw<<13 | bank<<14)
     const all = [...disks, user], nsec = 9 * DISK_SECTORS;
