@@ -7,7 +7,7 @@ usage: mkcart.py <disks> <userdisk.dsk> <font> [outdir]
   <disks>: one 5898240-byte image of disks 1-8 back to back,
            or a folder with the eight 720KB disk images (sorted by name = disk 1..8)
   <font>:  262144 bytes in the Kanji ROM layout (glyph index * 32), e.g. KANJI.rom.
-           Always used: patch G1 sends the game's glyph fetch to the font in the cartridge.
+           Always used: patches G1/G2 send the game's glyph fetches (the engine's and the ending intro's) to the font in the cartridge.
 
 ROM layout (both mappers):
   000000h  boot code, page-3 environment, FRAY.DOS (cart.asm, 16KB)
@@ -129,6 +129,13 @@ G1_SEC, G1_OFF = 82 + 0x29B9 // 512, 0x29B9 % 512
 G1_ORIG = [bytes.fromhex("7d29296fcb7420040e" + p + "18020e" + q + "ed610ded690c2100d50620edb2c9")
            for p, q in (("d9", "db"), ("59", "5b"))]
 G1_NEW = bytes([0xC3, 0x47, 0xE9]) + bytes(25)
+# G2: disk 1 file 14 (the ending intro, loaded at 8000h) has its own copy of that routine at ADFEh (same 28 bytes; the glyph goes to
+# 86BCh and it returns HL=86DCh).  -> CALL E947h (the glyph routine above, glyph in D500h), then copy the 32 bytes:
+# LD HL,D500h / LD DE,86BCh / LD BC,0020h / LDIR / EX DE,HL / RET
+G2_SEC, G2_OFF = 238 + 0x2DFE // 512, 0x2DFE % 512
+G2_ORIG = [bytes.fromhex("7d29296fcb7420040e" + p + "18020e" + q + "ed610ded690c21bc860620edb2c9")
+           for p, q in (("d9", "db"), ("59", "5b"))]
+G2_NEW = bytes.fromhex("cd47e9" "2100d5" "11bc86" "012000" "edb0" "eb" "c9").ljust(28, b'\0')
 
 
 def read_disks(path):
@@ -202,6 +209,13 @@ def patch_g1(disk1):
     return disk1[:o] + G1_NEW + disk1[o + 28:]
 
 
+def patch_g2(disk1):
+    o = G2_SEC * 512 + G2_OFF
+    if disk1[o:o + 28] not in G2_ORIG:
+        sys.exit(f'disk 1: unexpected bytes at the ending text glyph routine (file 14): {disk1[o:o + 28].hex()}')
+    return disk1[:o] + G2_NEW + disk1[o + 28:]
+
+
 def assemble(mapper, fray, tmp):
     shutil.copy(os.path.join(HERE, 'cart.asm'), tmp)
     os.makedirs(os.path.join(tmp, 'zx0'), exist_ok=True)
@@ -235,7 +249,7 @@ def main():
         sys.exit(f'{sys.argv[3]}: expected {FONTSIZE} bytes')
     outdir = sys.argv[4] if len(sys.argv) > 4 else '.'
     fray = fat12_file(disks[0], b'FRAY    DOS')
-    disks[0] = patch_g1(disks[0])
+    disks[0] = patch_g2(patch_g1(disks[0]))
     with tempfile.TemporaryDirectory() as tmp:
         syms = {}
         boots = {}

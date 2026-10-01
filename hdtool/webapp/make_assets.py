@@ -9,7 +9,7 @@ sys.path.insert(0, mk)
 import patches
 disks, com, bootimg = sys.argv[1:4]
 work = sys.argv[4] if len(sys.argv) > 4 else tempfile.mkdtemp()
-pl = [{'id': p['id'], 'disk': p['disk'], 'sector': p['sector'], 'offset': p['offset'], 'orig': p['orig'].hex(), 'new': p['new'].hex(), 'font': p['id'] == 'G1'} for p in patches.get_patches(True, True)]
+pl = [{'id': p['id'], 'disk': p['disk'], 'sector': p['sector'], 'offset': p['offset'], 'orig': p['orig'].hex(), 'new': p['new'].hex(), 'font': p['id'] in ('G1', 'G2')} for p in patches.get_patches(True, True)]
 out = os.path.join(work, 'ref')
 subprocess.run([sys.executable, os.path.join(mk, 'mkdos2.py'), disks, out], check=True, capture_output=True)
 m = json.load(open(os.path.join(out, 'manifest.json')))
