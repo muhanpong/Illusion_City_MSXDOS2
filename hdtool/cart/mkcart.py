@@ -9,6 +9,8 @@ usage: mkcart.py <disks> <userdisk.dsk> <font> [outdir]
   <font>:  262144 bytes in the Kanji ROM layout (glyph index * 32), e.g. KANJI.rom.
            Always used: patches G1/G2 send the game's glyph fetches (the engine's and the ending intro's) to the font in the cartridge.
 
+Not packed: ARMI.COM and ARMI.DOC (disk 1 sectors 588h-597h, a bonus player; unused by the game) are blanked first.
+
 ROM layout (both mappers):
   000000h  boot code, page-3 environment, FRAY.DOS (cart.asm, 16KB)
   004000h  sector table low words (cart.asm TBLLO), 00A600h high bytes (TBLHI), per sector of disk 1 .. 8, user disk
@@ -216,6 +218,22 @@ def patch_g2(disk1):
     return disk1[:o] + G2_NEW + disk1[o + 28:]
 
 
+# ARMI.COM / ARMI.DOC (the author's bonus RCP player and its document, disk 1 sectors 588h-597h): the game never reads them and
+# the cartridge has no file system to reach them, so they are not packed: the sectors become the disk's own free-space fill.
+ARMI_FIRST, ARMI_LAST = 0x588, 0x597
+ARMI_HEADS = {0x588: bytes.fromhex('c30301cdd102'), 0x58E: b'Please read following;'}
+
+
+def blank_armi(disk1):
+    for s, head in ARMI_HEADS.items():
+        if disk1[s * 512:s * 512 + len(head)] != head:
+            sys.exit(f'disk 1: sector {s:03X}h does not start like ARMI (this is not the supported release)')
+    fill = disk1[0x598 * 512:0x599 * 512]
+    if fill.count(fill[0]) != 512:
+        sys.exit('disk 1: sector 598h is not free space (this is not the supported release)')
+    return disk1[:ARMI_FIRST * 512] + fill * (ARMI_LAST - ARMI_FIRST + 1) + disk1[(ARMI_LAST + 1) * 512:]
+
+
 def assemble(mapper, fray, tmp):
     shutil.copy(os.path.join(HERE, 'cart.asm'), tmp)
     os.makedirs(os.path.join(tmp, 'zx0'), exist_ok=True)
@@ -249,7 +267,7 @@ def main():
         sys.exit(f'{sys.argv[3]}: expected {FONTSIZE} bytes')
     outdir = sys.argv[4] if len(sys.argv) > 4 else '.'
     fray = fat12_file(disks[0], b'FRAY    DOS')
-    disks[0] = patch_g2(patch_g1(disks[0]))
+    disks[0] = blank_armi(patch_g2(patch_g1(disks[0])))
     with tempfile.TemporaryDirectory() as tmp:
         syms = {}
         boots = {}
