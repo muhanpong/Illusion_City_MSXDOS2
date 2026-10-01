@@ -53,6 +53,7 @@ def P(id, secoff, orig, new):
     return {"id": id, "disk": "1", "sector": s, "offset": o, "orig": bytes(orig), "new": bytes(new)}
 
 G1_ORIG = bytes.fromhex("7d29296fcb7420040ed91802" "0edb" "ed610ded690c2100d50620edb2c9")
+G2_ORIG = bytes.fromhex("7d29296fcb7420040ed91802" "0edb" "ed610ded690c21bc860620edb2c9")   # file 14 ADFEh: buffer 86BCh
 
 def pad(b, n):
     assert len(b) <= n, (len(b), n)
@@ -120,6 +121,11 @@ def get_patches(midi, font=False):
         #     -> JP E980h: the glyph wrapper the launcher installs in game page 3; it asks the launcher for the
         #     glyph (function 50h) which reads \ICITY\FONT.BIN (same layout as KANJI.rom) through a cache.
         pl.append(P("G1", (82 + 0x29B9 // 512, 0x29B9 % 512), G1_ORIG, pad(bytes([0xC3, 0x80, 0xE9]), 28)))
+        # G2: disk 1 file 14 (the ending intro, 8000h) has its own copy of that routine at ADFEh, same 28 bytes, but the glyph
+        #     goes to 86BCh and it returns HL=86DCh.  -> CALL E980h (the G1 wrapper, glyph in D500h), then copy the 32 bytes:
+        #     LD HL,D500h / LD DE,86BCh / LD BC,0020h / LDIR / EX DE,HL / RET
+        pl.append(P("G2", (238 + 0x2DFE // 512, 0x2DFE % 512), G2_ORIG,
+                    pad(bytes.fromhex("cd80e9" "2100d5" "11bc86" "012000" "edb0" "eb" "c9"), 28)))
     return pl
 
 PATCHES = get_patches(False)

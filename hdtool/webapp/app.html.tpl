@@ -119,6 +119,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 </section>
 
 <footer>
+도구 버전 2026-10-01 — 엔딩 인트로의 글자까지 글꼴로 나오게 한 판입니다(DOS2·카트리지·플로피). 이 날짜 이전에 만든 DOS2·카트리지 결과물은 한자 ROM 없는 기계에서 엔딩 인트로 글자가 깨지므로 다시 만들어 주세요.<br>
 HDD: 16MB FAT12 하드디스크 이미지(헤더 없는 원시 섹터 이미지). openMSX: IDE·Nextor 확장을 붙이고 <code>hda ICITY.hd.dsk</code>(openMSX도 하드디스크를 hd.dsk로 부름). MiSTer: 내용이 같으므로 확장자만 <code>.vhd</code>로 바꿔 쓰세요. ZIP: 안의 ICITY.COM 과 ICITY 폴더를 SD 카드 루트에 복사하세요.
 ROM: 내용 4MB(4MB 이상 플래시의 Yamanooto 또는 ASCII16-X 카트리지용, 매퍼마다 파일 하나, 만드는 데 몇십 초). ASCII16-X 파일에는 0010h에 "ASCII16X" 서명이 있어 openMSX와 MiSTer 코어(매퍼 auto)가 플래시 매퍼로 인식합니다. 카트리지만 꽂고 켜면 시작하고, 한글은 ROM 안의 글꼴로 나오며(실행하는 기계에 한글 한자 ROM 불필요), 디스크 1·유저 디스크 슬롯 세이브는 카트리지 플래시에 기록됩니다. openMSX: <code>-carta ICITY_YAMA.rom -romtype Yamanooto</code>.
 플로피: 디스크 1의 빈 섹터(550h~)에 게임이 쓰는 글자 1395자만 압축해 넣고, 한자 ROM 대신 그 글꼴을 읽게 합니다. FM·MIDI 모두 동작합니다.
