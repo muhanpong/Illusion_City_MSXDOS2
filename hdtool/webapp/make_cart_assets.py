@@ -16,6 +16,7 @@ out = {'frayLen': FRAYLEN, 'data': mkcart.DATA, 'font': mkcart.FONT, 'fontSize':
        'nsave': mkcart.NSAVE, 'tblLo': mkcart.TBLLO, 'tblHi': mkcart.TBLHI, 'dataEnd': mkcart.DATAEND,
        'romSize': mkcart.ROMSIZE, 'file9Sec': mkcart.FILE9_SEC, 'file9Base': mkcart.FILE9_BASE,
        'g1': {'sector': mkcart.G1_SEC, 'offset': mkcart.G1_OFF, 'orig': [o.hex() for o in mkcart.G1_ORIG], 'new': mkcart.G1_NEW.hex()},
+       'g2': {'sector': mkcart.G2_SEC, 'offset': mkcart.G2_OFF, 'orig': [o.hex() for o in mkcart.G2_ORIG], 'new': mkcart.G2_NEW.hex()},
        'mappers': []}
 with tempfile.TemporaryDirectory() as tmp:
     shutil.copy(os.path.join(cart, 'cart.asm'), tmp)
