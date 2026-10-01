@@ -466,6 +466,12 @@ ROM: 내용 4MB(4MB 이상 플래시의 Yamanooto 또는 ASCII16-X 카트리지�
     const g2 = C.g2, o2 = g2.sector * SEC + g2.offset;
     if (!g2.orig.some(h => same(disks[0], o2, hexBytes(h)))) throw new Error('patch G2: the bytes on disk 1 do not match - this is not the supported release');
     disks[0].set(hexBytes(g2.new), o2);
+    // ARMI.COM / ARMI.DOC (bonus player, disk 1 sectors 588h-597h): not used by the game and not reachable from the cartridge, so blanked
+    const armi = [[0x588, hexBytes('c30301cdd102')], [0x58E, new TextEncoder().encode('Please read following;')]];
+    for (const [sec, head] of armi) if (!same(disks[0], sec * SEC, head)) throw new Error('disk 1: sector ' + sec.toString(16).toUpperCase() + 'h does not start like ARMI - this is not the supported release');
+    const free = disks[0].slice(0x598 * SEC, 0x599 * SEC);
+    if (free.some(b => b !== free[0])) throw new Error('disk 1: sector 598h is not free space - this is not the supported release');
+    for (let sec = 0x588; sec <= 0x597; sec++) disks[0].set(free, sec * SEC);
     // save-list paging (file9, loaded at 4000h): 96 slots per disk
     for (const p of C.ui) {
       const q = C.file9Sec * SEC + p.addr - C.file9Base;
