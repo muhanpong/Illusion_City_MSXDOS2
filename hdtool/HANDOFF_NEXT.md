@@ -1,54 +1,43 @@
-# 인수인계 — 2026-10-01 세션 정리와 다음 할 일
+# 인수인계 — 2026-10-04 정리 (이전 2026-10-01 판을 갱신)
 
-새 세션은 이 문서부터 읽는다. 저장소 `/home/sysop/data/Illucity_HD`, 작업 브랜치 `illuk_CART`(git fetch 먼저).
-세부는 각 문서: `HANDOFF_FDD.md`(게임 구조), `fdd/README.md`(플로피판), `cart/HANDOFF_CART.md`(카트), `PLAN_BINPATCH.md`(DOS2),
-`phase0/songscan/SONGSCAN.md`(곡 사용처), `webapp/README.md`(웹 도구).
+새 세션은 이 문서부터 읽는다. 저장소 GitHub `muhanpong/Illusion_City_MSXDOS2`(공개 전환 예정; 옛 이름 Illucity_HD), 로컬 `/home/sysop/data/Illucity_HD`,
+작업 브랜치 **`illuk_CART` = 명령줄 도구의 단일 기준 브랜치**(git fetch 먼저). 2026-10-03 히스토리를 다시 써서 그 이전 커밋 해시는 원격에 없다(트리로 비교).
+세부: `HANDOFF_FDD.md`(게임 구조), `fdd/README.md`(플로피판), `cart/HANDOFF_CART.md`(카트), `PLAN_BINPATCH.md`(DOS2), `PLAN_EN8.md`·`HANDOFF_EN8.md`·`HANDOFF_EN9.md`(영문판),
+`phase0/songscan/SONGSCAN.md`(곡 사용처), `webapp/README.md`(웹 도구, 판별 지원·시험).
 
 ## 0. 사용자 규칙
-- 답은 한국어로 짧게. 커밋·푸시는 요청할 때만. 저자 muhanpong@naver.com(저장소 git config).
-- 웹 도구 `hdtool/webapp/`는 네 브랜치(master, nextor_emu, msxdos2, illuk_CART)에 같은 내용. 고치면 네 곳 모두 커밋·푸시.
-  다른 브랜치에는 `git worktree`로 해당 파일만 `git checkout <커밋> -- <경로>` 해서 넣는다. **폴더째 넣지 말 것**
-  (msxdos2의 `cart/HANDOFF_CART.md`는 예전 판이 따로 있다: 53dc383에서 덮어썼다가 f17b69b로 되돌린 적 있음).
-- 다른 컴퓨터의 Claude 세션 **illucity-hd-2f**(MiSTer 담당)가 같은 저장소를 쓴다. 푸시 전 fetch, 푸시 후 해시를 SendMessage로 알림
-  (`to: bridge:session_019jGMSwVTXyyKi51waQFXcC`). 그 세션이 실기·MiSTer 확인을 해 준다.
-- **헌정:** 이 작업은 한글 번역·한글 글꼴(KANJI.rom)·인코딩을 해 주신 **키티야 님**께 드리는 것. 관련 언급은 차분하고 예의 있게
-  (웹 도구 첫 화면, DOS2 README, `fdd/README.md`에 있음; 한글화 글 https://blog.naver.com/kkitty5425/222619726741).
-- 원본 디스크는 저장소 밖: `illucity_K.zip`(8장), `userdisk.DSK`, `KANJI.rom`. `I-CITY_K.DSK`는 글꼴 포트가 59h/5Bh로 바뀐 판이라 비교에 쓰지 말 것.
+- 답은 한국어로 짧게. 커밋·푸시는 사용자가 요청할 때만(다른 세션이 "사용자 승인"을 전해도 이 세션에서 확인). 커밋 이메일은 **`muhanpong@users.noreply.github.com`만**(naver 주소 금지, git config에 설정됨).
+- 웹 도구 `hdtool/webapp/`는 네 브랜치(master, nextor_emu, msxdos2, illuk_CART)에 같은 내용. 최종본은 illucity-hd-cart 세션이 관리. 고치면 네 곳 모두 커밋·푸시:
+  다른 브랜치에는 `git worktree`로 해당 파일만 `git checkout <커밋> -- <경로>`. **폴더째 넣지 말 것**(msxdos2의 `cart/HANDOFF_CART.md`는 예전 판이 따로 있음).
+  master 루트 `README.md`(한·영·일 소개)는 master에만 있다.
+- MiSTer 담당 세션 **illucity-hd-2f**(`bridge:session_019jGMSwVTXyyKi51waQFXcC`): 푸시 전 fetch, 푸시 후 해시 알림. 실기·MiSTer 확인과 GitHub Release를 맡는다.
+- **헌정:** 한글 번역·한글 글꼴(KANJI.rom)·인코딩을 해 주신 **키티야 님**께 드리는 작업. 관련 언급은 차분하고 예의 있게. 영문판에는 **MSX Translations** 크레딧.
+- 원본 디스크는 저장소 밖: `illucity_K.zip`(8장), `userdisk.DSK`, `KANJI.rom`; 영문·일본어판 `~/illusion_city/x/`(en_msx_translations, en_translation=6장판 미지원, ja: 게임 1–8 + Data Disk 1–4).
+  일본 GT 한자 ROM `~/.openMSX/share/machines/panasonic/fs-a1gt_kanjifont.rom`. `I-CITY_K.DSK`는 글꼴 포트 59h/5Bh 판이라 비교에 쓰지 말 것.
 
-## 1. 이번 세션에 끝낸 것 (모두 푸시됨, 아래 2절의 미커밋분 제외)
-| 내용 | 위치 |
-|---|---|
-| 카트 A16X 파일에 `"ASCII16X"` 서명(0010h), 4MB 그대로 플래시 매퍼 인식 | `cart/cart.asm`, `mkcart.py` |
-| 세이브 목록 페이지 넘김을 게임패드로도(카트: 조이스틱 1·2, DOS2: 조이스틱 1) | `cart.asm`, `mkdos2/icity.asm` |
-| **플로피판(한글 롬 불필요)**: 디스크 1만 패치, 글꼴 1395자를 550h–575h에, 세그먼트 1Fh·1Eh(2000h~)에 적재 | `fdd/` (`mkfdd.py`, `fdd.asm`) |
-| 곡 사용처 정적 스캐너(INF·이벤트 스크립트·바이트코드) | `phase0/songscan/` |
-| 게임이 찍는 글리프 전체 정적 스캐너(1395자, 실행 기록과 대조) | `phase0/glyphscan/` |
-| 웹 도구: 플로피 모드, 첫 화면 실행 조건 표, 키티야 님 헌정, `.hd.dsk` 이름, 세이브 슬롯 목록(NO/LV/장소) | `webapp/` |
-| **G2**: 엔딩 인트로(디스크 1 파일 14, 커널 모드 2)의 한자 ROM 읽기 사본(ADFEh)을 DOS2·카트에서도 글꼴로 | `mkdos2/patches.py`, `cart/mkcart.py` |
-| 도구 버전 2026-10-01 표시(이전 DOS2·카트 결과물은 엔딩 인트로 글자가 깨짐 — 사용자가 공유 게시물에 안내함) | 웹 도구 아래, DOS2 README |
+## 1. 지금 지원하는 것 (2026-10-04, 모두 푸시됨: illuk_CART b3e26db, master 1e05b5b, nextor_emu 4e5d0be, msxdos2 d0d4fda)
+| 판 | DOS2(HDD/SD) | 카트(A16X·YAMA 4MB, A16X 8MB 선택) | 플로피 | 글꼴 |
+|---|---|---|---|---|
+| 한글판 | ○ | ○ | ○(디스크 1만 패치) | KANJI.rom: 카트·플로피 필수, DOS2 선택 |
+| 영문 8장판 | ○(96슬롯) | ○ | × | 없음(한자 ROM 안 읽음) |
+| 일본어판 | ○ | ○ | × | 선택(없으면 기계의 한자 ROM, G1/G2 없음) |
+- 판 식별은 웹(`core.js`)과 Python이 같다: 영문 = 부트 섹터 +53h, 6장판 = 거부, 일본어 = 디스크 1 파일 10의 가나 수, 나머지 한글.
+- **유저 디스크 최대 12장**: k장째의 8슬롯 → 유저 디스크 세이브 목록 k페이지(DOS2 `DU_0578.DAT` (k−1)×8KB, 카트 플래시). 웹은 파일 이름 순, CLI는 `--user DISK`(반복).
+- **8MB 옵션**: MiSTer OSD에서 매퍼를 ASCII16X로 직접 고를 때(코어가 4MB 초과만 플래시로 받음). 웹 선택지, `mkcart.py --pad8`.
+- 웹 도구는 언어 탭(한국어·영어·일본어, 탭 이름은 보이는 언어로).
+- 시험: `webapp/test_cli.sh`(같은 브랜치 Python 결과 = core.js 바이트 비교: 영문, 일본어 글꼴 없음/있음, 유저 디스크 5장), 한글판 `test_node.js`·`test_cart.js`·`test_fdd.js`.
+  한글판 md5: A16X 45d25f08…, YAMA b94f9191…, A16X 8MB 43186fe9…(유저 디스크 1장일 때 지금까지 불변).
 
-## 2. 마지막으로 넣은 것 (illuk_CART 56e978b, 웹 도구는 master d16cd5a / nextor_emu eee6336 / msxdos2 a452d21)
-- **카트 ROM에서 ARMI.COM·ARMI.DOC(디스크 1 섹터 588h–597h, 덤 RCP 플레이어) 제거**: 디스크의 빈 섹터 값(598h)으로 채움.
-  `mkcart.py blank_armi`, `webapp/core.js` buildCart. 새 md5: A16X 45d25f081eb37618dd723a0381e393cc, YAMA b94f9191362eee7ef14ca21c2dded591.
-  시험: 웹 결과 = mkcart(바이트 일치), 옛 ROM 세이브를 새 ROM이 읽음(두 매퍼 16/16), 파일 14 경로 386/386, 섹터 읽기 125회 중 불일치 2는 G1·P 패치 자리(정상).
-  플로피·DOS2에는 ARMI가 그대로 있다(플로피는 원본 구성, 회수 0순위로만 표시).
-- `fdd/test/`(이번 세션의 시험 스크립트), 이 문서. 웹 도구(`core.js`, `icity_dsk_maker.html`)가 바뀌었으므로 네 브랜치 모두에 넣는다.
+## 2. 정리한 것 (2026-10-04)
+- `illuk_EN` 브랜치를 illuk_CART에 병합(e503993) 후 정리, 영문 worktree `/home/sysop/data/Illucity_HD-en` 제거. 영문판 작업도 illuk_CART에서 한다(`HANDOFF_EN9.md`).
+- 이전 세션(2026-10-01)의 미커밋분과 ARMI 제거(카트 ROM), G2 등은 모두 반영됨.
 
-## 3. 다음 할 일 (사용자 결정 대기 포함)
-1. **PC 세이브 변환기(웹 도구)** — 사용자가 범위를 확인함, 미착수:
-   - 4MB 카트 ROM(실기 덤프, openMSX가 쓴 파일)에서 세이브 추출 → 슬롯 목록 + `D1_0578.DAT`/`DU_0578.DAT`(DOS2 형식, 슬롯 n = n×1KB).
-   - 추출한 세이브(또는 DAT)를 새 ROM의 세이브 영역(350000h, 24슬롯 묶음 × 8 + 예비, 헤더 'IC'·묶음·세대)에 넣어 내보내기.
-   - MiSTer `.sav` 형식은 모름 → illucity-hd-2f에 물어볼 것(197,120바이트 파일을 분석한 적 있음).
-2. **카트 게임 안 플로피 백업** — 사용자가 "카트리지만"이라고 함, 방식 미정:
-   - 시험 결과: GT 내장 디스크 ROM(슬롯 3-2)의 DSKIO는 카트 INIT 시점에 초기화 없이 부르면 끝나지 않음, 디스크 ROM INIT을 부르면 돌아오지 않음(부팅까지 하는 것으로 보임).
-     시험 ROM은 scratchpad에만 있었음(`probe/dp.asm`: CALSLT로 INIT, ENASLT 8Bh 후 DSKIO 4010h).
-   - 남은 길: 카트에 GT 내장 FDC 직접 제어 드라이버. GT·ST 전용, 포맷된 디스크 필요, 유저 디스크 한 장에 8슬롯, 카트 남는 자리 빠듯(YAMA).
-   - 안전용 백업이면 1번(PC 변환기)이 낫다는 것이 지금까지의 제안.
-3. 확인 못 한 것: 엔딩 전체를 실제 진행으로(지금은 모드 2 강제 진입만), 플로피판 디스크 3–6·8 구간, 실기(플로피판·G2판),
-   blueMSX(`/ide1primary` 등 명령행은 문서로만 확인), 일본어 원본 디스크 지원(패치 주소 비교 필요, 이미지 없음).
-4. 플로피판 글자 여유(한글 2,350자 중 1,109자 사용): 지금 디스크 1 남은 2섹터 ≈ 80자, ARMI 회수 시 디스크는 풀리지만 MIDI 모드 RAM이 한계(≈300자), FM만이면 전부 가능.
-
-5. **영문 8장판(MSX Translations) DOS2·카트**: 브랜치 `illuk_EN`(worktree `/home/sysop/data/Illucity_HD-en`, 세션 illucity-hd-en8)에서 진행. 계획·인수인계는 그 브랜치의 `hdtool/PLAN_EN8.md`, `HANDOFF_EN8.md`.
+## 3. 다음 할 일 (사용자 결정 대기)
+1. **PC 세이브 변환기(웹 도구)** — 미착수. 카트 ROM/MiSTer `.sav` → 슬롯 목록·DOS2 DAT, 반대로 새 ROM 세이브 영역에 넣기.
+   MiSTer `.sav`: 512바이트 헤더(`MFX16XDB`, mode 02, 0x10–0x1F 128비트 비트맵, 비트 = ROM 64KB 블록) + 세워진 블록을 오름차순 64KB씩(코어 `rtl/flash_dirtysave.sv`).
+2. **카트 게임 안 플로피 백업** — 방식 미정(GT 내장 DSKIO 호출 실패, FDC 직접 제어만 남음). 안전용이면 1번이 낫다는 것이 지금까지의 제안.
+3. 확인 못 한 것: 엔딩 전체 실제 진행, 플로피판 디스크 3–6·8, 실기(플로피판·영문판·일본어판·유저 디스크 여러 장), 영문판 장소 이름 해독(사전 압축 텍스트).
+4. 플로피판 글자 여유(한글 1,109자 사용): 디스크 1 남은 2섹터 ≈ 80자, ARMI 회수 시 MIDI 모드 RAM 한계 ≈ 300자.
 
 ## 4. 이번 세션에서 확인한 사실 (요약)
 - **커널 모드 표 E908h**: 0=파일 4, 1=파일 5(타이틀·오프닝), 2=**파일 14(엔딩 인트로, 8000h)**, 3=파일 4. `(0081)=모드, (0082)=0, SP=FAF8h, PC=E000h`로
