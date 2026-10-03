@@ -4,6 +4,8 @@
 DOS2판(`hdtool/mkdos2`, 배포 zip, 웹앱)은 완료 상태이며 이 작업과 별개다.
 
 ## 0. 현재 상태
+(영문 8장판 카트는 `cart.asm`의 `IFDEF EN8`와 `mkcart.py` 자동 식별로 같은 도구에서 나온다: `test/en8/README.md`, `PLAN_EN8.md`. 한글판 ROM은 그대로.)
+
 - **ROM은 4MB**(4MB 이상 플래시면 됨). **ASCII16-X 파일만 오프셋 0010h(4010h–4017h)에 `"ASCII16X"` 서명**: openMSX(guessRomType)와
   MiSTer 코어(`mapper_detect.sv`, OSD 매퍼 auto)가 크기와 상관없이 ASCII16-X(플래시)로 고른다. 전에는 코어가 4MB 초과 파일만
   플래시로 인식해(`memory_upload.sv` rom_big, OSD에서 ASCII16X를 직접 고를 때는 지금도 이 규칙) 8MB로 채웠다(22a8a85). Yamanooto 파일은 그 자리가 FFh

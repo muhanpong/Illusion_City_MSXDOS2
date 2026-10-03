@@ -3,11 +3,15 @@
 more. The ASCII16-X file carries the "ASCII16X" signature at 0010h (cart.asm), so openMSX and the MiSTer core (mapper
 auto) take it as ASCII16-X with flash at 4MB.
 
-usage: mkcart.py <disks> <userdisk.dsk> <font> [outdir]
+usage: mkcart.py <disks> <userdisk.dsk> <font|-> [outdir]
   <disks>: one 5898240-byte image of disks 1-8 back to back,
            or a folder with the eight 720KB disk images (sorted by name = disk 1..8)
   <font>:  262144 bytes in the Kanji ROM layout (glyph index * 32), e.g. KANJI.rom.
            Always used: patches G1/G2 send the game's glyph fetches (the engine's and the ending intro's) to the font in the cartridge.
+
+English 8-disc release (MSX Translations, detected from disk 1's boot sector): <font> is "-" (the English game never reads the Kanji ROM;
+no G1/G2), FRAY.DOS is replaced by the boot sector's own load (disk 1 sectors 0Bh-12h at 0100h, then JP 0D46h), cart.asm is built with -DEN8
+and ARMI is left in (a different release of the extras).  The ROM layout is the same (the font area stays 0FFh).
 
 Not packed: ARMI.COM and ARMI.DOC (disk 1 sectors 588h-597h, a bonus player; unused by the game) are blanked first.
 
@@ -234,13 +238,18 @@ def blank_armi(disk1):
     return disk1[:ARMI_FIRST * 512] + fill * (ARMI_LAST - ARMI_FIRST + 1) + disk1[(ARMI_LAST + 1) * 512:]
 
 
-def assemble(mapper, fray, tmp):
+def is_en8(disk1):
+    """English 8-disc disk 1: the boot sector reads sectors 0Bh-12h (8 sectors) to 0100h (LD HL,0800h / LD DE,000Bh)."""
+    return disk1[0x53:0x59] == bytes.fromhex('210008110b00')
+
+
+def assemble(mapper, fray, tmp, en8=False):
     shutil.copy(os.path.join(HERE, 'cart.asm'), tmp)
     os.makedirs(os.path.join(tmp, 'zx0'), exist_ok=True)
     shutil.copy(os.path.join(HERE, 'zx0', 'dzx0_standard.asm'), os.path.join(tmp, 'zx0'))
     with open(os.path.join(tmp, 'fray.dos'), 'wb') as f:
         f.write(fray)
-    r = subprocess.run([SJASM, f'-DMAPPER={mapper}', '--nologo', '--msg=war',
+    r = subprocess.run([SJASM, f'-DMAPPER={mapper}'] + (['-DEN8=1'] if en8 else []) + ['--nologo', '--msg=war',
                         f'--lst=cart_{MAPPERS[mapper]}.lst', '--sym=cart.sym', 'cart.asm'],
                        cwd=tmp, capture_output=True, text=True)
     if r.returncode:
@@ -262,17 +271,27 @@ def main():
     user = open(sys.argv[2], 'rb').read()
     if len(user) != DISK:
         sys.exit(f'{sys.argv[2]}: expected {DISK} bytes')
-    font = open(sys.argv[3], 'rb').read()
-    if len(font) != FONTSIZE:
-        sys.exit(f'{sys.argv[3]}: expected {FONTSIZE} bytes')
+    en8 = is_en8(disks[0])
+    if en8:
+        if sys.argv[3] != '-':
+            sys.exit('English 8-disc release: no font (pass -)')
+        font = None
+    else:
+        font = open(sys.argv[3], 'rb').read()
+        if len(font) != FONTSIZE:
+            sys.exit(f'{sys.argv[3]}: expected {FONTSIZE} bytes')
     outdir = sys.argv[4] if len(sys.argv) > 4 else '.'
-    fray = fat12_file(disks[0], b'FRAY    DOS')
-    disks[0] = blank_armi(patch_g2(patch_g1(disks[0])))
+    if en8:
+        print('English 8-disc release (MSX Translations)')
+        fray = disks[0][11 * 512:19 * 512]                  # the boot sector's load: sectors 0Bh-12h -> 0100h
+    else:
+        fray = fat12_file(disks[0], b'FRAY    DOS')
+        disks[0] = blank_armi(patch_g2(patch_g1(disks[0])))
     with tempfile.TemporaryDirectory() as tmp:
         syms = {}
         boots = {}
         for mapper in MAPPERS:
-            boots[mapper], syms[mapper] = assemble(mapper, fray, tmp)
+            boots[mapper], syms[mapper] = assemble(mapper, fray, tmp, en8)
         ui = [ui_patches(syms[m]) for m in MAPPERS]
         assert all(u == ui[0] for u in ui), 'page-3 UI addresses differ between mappers'
         disks[0] = patch_ui(disks[0], syms[1])
@@ -287,7 +306,8 @@ def main():
             rom[TBLLO:TBLLO + len(tlo)] = tlo
             rom[TBLHI:TBLHI + len(thi)] = thi
             rom[DATA:DATA + len(blob)] = blob
-            rom[FONT:FONT + FONTSIZE] = font
+            if font:
+                rom[FONT:FONT + FONTSIZE] = font
             for off, b in save_layout(disks[0], user).items():
                 rom[off:off + len(b)] = b
             out = os.path.join(outdir, f'ICITY_{tag}.rom')

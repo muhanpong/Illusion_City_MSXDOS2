@@ -49,8 +49,18 @@ X2BASE  equ 0F13Ah
 X2END   equ 0F16Ah
 X3BASE  equ 0F325h
 X3END   equ 0F341h
+        IFDEF EN8
+; English 8-disc release (MSX Translations): the game's kernel and tables are E000h-E96Eh, its own code fills page 0 0055h-00F7h, and it never
+; writes E96Fh-EDDEh (measured: opening demo, MIDI, 27 save loads), so the flash helpers go to E96Fh and the save helpers that were in page 0 to EA00h.
+; There is no glyph code (the English game never reads the Kanji ROM) and no font in the ROM.
+GLYPHW  equ 0E96Fh              ; flash helpers
+GLYEND  equ 0EA00h
+P0BASE  equ 0EA00h              ; erase64, p128, possec, slotsec, chsec, rdhdr (page 0 0055h-00FFh in the Korean build)
+P0END   equ 0EDDFh
+        ELSE
 GLYPHW  equ 0E947h              ; patch G1 jumps here (E947h-E9FFh: glyph fetch + flash helpers)
 GLYEND  equ 0EA00h
+        ENDIF
 FONTSEC equ 1880h               ; ROM offset of the font (310000h) in 512-byte sectors (mkcart.py FONT)
 
         OUTPUT "cart.bin"
@@ -83,6 +93,12 @@ init:   di
         ld      de,GLYPHW
         ld      bc,glylen
         ldir
+        IFDEF EN8
+        ld      hl,p0img
+        ld      de,P0BASE
+        ld      bc,p0len
+        ldir
+        ENDIF
         ld      hl,uiimg
         ld      de,UIBASE
         ld      bc,uilen
@@ -201,7 +217,13 @@ golaunch:
         out     (0A8h),a
         ld      sp,0FAF8h
         ei
+        IFDEF EN8
+        ld      hl,0100h                ; the English boot sector: PUSH 0100h, JP 0D46h (copies the loader's tables and code, then RET to 0100h)
+        push    hl
+        jp      0D46h
+        ELSE
         jp      0100h
+        ENDIF
         ENT
 golen   equ     $-golaunch
 
@@ -422,6 +444,27 @@ page0:
 ; secondary slot register of another primary: must run in page 0 while page 3 is switched away.
 ; subw: A = A8 with page 3 on the target primary, C = A8 to restore, L = keep mask, H = new bits
 ;       -> D = old register value, H = new register value
+        IFDEF EN8
+; the English game's boot code (0D46h) copies its own code to 0055h, so this has to end at 0054h: the two routines share their tail
+subw:   out     (0A8h),a
+        ld      a,(SUBREG)
+        cpl
+        ld      d,a
+        and     l
+        or      h
+        ld      (SUBREG),a
+        ld      h,a
+        jr      subt
+subr:   out     (0A8h),a
+        ld      a,d
+        ld      (SUBREG),a
+subt:   ld      a,c
+        out     (0A8h),a
+        ret
+        ASSERT  $ <= 55h
+        ds      80h-$,0
+        db      0,0,0,98h,98h,23h,0F3h,0 ; 0080h-0087h as the original boot sector leaves them
+        ELSE
 subw:   out     (0A8h),a
         ld      a,(SUBREG)
         cpl
@@ -528,9 +571,101 @@ rdhdr:  call    p128
         ld      hl,hbuf
         ld      bc,5
         jp      xfer
+        ENDIF
         ASSERT  $ <= 100h
         ds      100h-$,0
         ENT
+
+        IFDEF EN8
+; save helpers (page 0 in the Korean build), page 3 EA00h in the English one
+p0img:
+        DISP    P0BASE
+; erase64: DE = first ROM sector of a 64KB flash sector. NZ = timeout.
+erase64: ld     hl,0
+        ld      (soff),hl
+        call    fmap
+        ld      a,80h
+        call    fcmd
+        call    unlock
+        ld      (hl),30h
+        ld      c,0FFh
+        jp      fdone
+; p128: A = flash save sector 0-8 -> HL = its first ROM sector (SAVESEC + A*128)
+p128:   rrca
+        ld      h,a
+        and     80h
+        ld      l,a
+        xor     h
+        ld      h,a
+        ld      de,SAVESEC
+        add     hl,de
+        ret
+; possec: A = position 0-23 -> A = its sector within the flash sector (bank*32 + (p mod 8)*2)
+possec: push    bc
+        ld      b,a
+        and     7
+        add     a,a
+        ld      c,a
+        ld      a,b
+        and     18h
+        add     a,a
+        add     a,a
+        add     a,c
+        pop     bc
+        ret
+; slotsec: A = flash sector -> DE = ROM sector of slot position tpos, half thalf
+slotsec: call   p128
+        ld      a,(tpos)
+        call    possec
+        ld      e,a
+        ld      a,(thalf)
+        add     a,e
+        ld      e,a
+        ld      d,0
+        add     hl,de
+        ex      de,hl
+        ret
+; chsec: A = flash sector, B = position, C = chunk 0-31 -> DE = ROM sector, (soff)
+chsec:  call    p128
+        ld      a,b
+        call    possec
+        ld      e,a
+        ld      a,c
+        and     10h
+        rrca
+        rrca
+        rrca
+        rrca
+        add     a,e
+        ld      e,a
+        ld      d,0
+        add     hl,de
+        ex      de,hl
+        ld      a,c
+        and     0Fh
+        ld      l,a
+        ld      h,0
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        ld      (soff),hl
+        ret
+; rdhdr: A = flash sector -> hbuf = its header ('I','C', group, generation)
+rdhdr:  call    p128
+        ld      de,60h
+        add     hl,de
+        ex      de,hl
+        ld      hl,0
+        ld      (soff),hl
+        ld      hl,hbuf
+        ld      bc,5
+        jp      xfer
+        ENT
+p0len   equ     $-p0img
+        ASSERT  P0BASE+p0len <= P0END
+        ENDIF
 
 ; ---------------------------------------------------------------------------------------------
 ; page 3 environment at DD92h
@@ -1159,6 +1294,7 @@ reslen  equ     $-resimg
 ; font offset = idx*32 = sector FONTSEC + idx/16, byte (idx&15)*32.
 glyimg:
         DISP    GLYPHW
+        IFNDEF EN8
 glyph:  ld      a,l                     ; as the original: H = (HL*4)>>8, L unchanged
         add     hl,hl
         add     hl,hl
@@ -1208,6 +1344,7 @@ glyph:  ld      a,l                     ; as the original: H = (HL*4)>>8, L unch
         ld      bc,00D9h
         ret
 
+        ENDIF
 ; unlock: AAh -> window+AAAh, 55h -> window+555h (B = window base high byte). Keeps HL.
 unlock: push    hl
         ld      a,b
