@@ -8,10 +8,13 @@
 - 푸시 전 fetch, 푸시 후 MiSTer 세션 illucity-hd-2f(`bridge:session_019jGMSwVTXyyKi51waQFXcC`)에 해시 알림.
 - 한글판은 키티야 님(번역·글꼴·인코딩)께 드리는 작업. 영문판 문서에는 MSX Translations 크레딧.
 
-## 지금 상태
-- 작업 위치: **worktree `/home/sysop/data/Illucity_HD-en`, 로컬 브랜치 `illuk_EN`**(upstream 없음 — 첫 푸시 때 사용자 확인 후 `-u origin illuk_EN`). msx1-tmux가 origin/master d16cd5a에서 만들었지만 master에는 `mkdos2`·`cart`가 없다 → **커밋이 없을 때 illuk_CART `56e978b`로 맞춘다**(`git reset --hard 56e978b`, 새 worktree라 잃을 것 없음).
-- 한글판 worktree `/home/sysop/data/Illucity_HD`(illuk_CART)는 건드리지 않는다. 이 문서와 `PLAN_EN8.md`는 그쪽에서 미커밋으로 만들어졌으니 `illuk_EN` worktree로 복사해 첫 커밋에 넣는다.
-- 계획 단계 S1(원본 실행 기록·빈 곳 측정)부터 시작할 차례. 아직 빌드·실행 시험은 없음(바이트 비교·역어셈블만).
+## 지금 상태 (2026-10-03 갱신)
+- 작업 위치: worktree `/home/sysop/data/Illucity_HD-en`, 브랜치 `illuk_EN`(origin/illuk_EN, 푸시된 것은 문서 커밋 946e8ef까지). 아래 구현은 **미커밋**(커밋·푸시는 사용자 요청 때).
+- **DOS2판 완료·검증**: 자세한 결과와 정정 사항은 `PLAN_EN8.md` 맨 위 "진행 상태". 시험·재현은 `mkdos2/test/en8/README.md`.
+  빌드: `cd hdtool/mkdos2 && ./build.sh <영문 디스크 폴더(D1..D8.dsk 또는 원래 파일명 + DU.dsk)> <출력>`(자동 영문판 인식, `sjasmplus`는 저장소 밖: v1.24를 `USE_LUA=0 make`로 빌드, Nextor 파일은 `sys/`),
+  배포판: `./make_dist.sh <디스크 폴더> - <출력>`.
+- 측정·분석 기록: `hdtool/phase0/en8/`(S1_NOTES.md, 헤드리스 VRAM 보기, 일본어판 데이터 디스크 27슬롯 표).
+- 슬롯 96개 페이지, **카트(S9)도 구현·검증됨**(`cart/test/en8/README.md`; 빌드 `cd hdtool/cart && python3 mkcart.py <영문 디스크 8장 폴더> <유저디스크.dsk> - <출력>`). 다음: 웹 도구(S10), 실기·MiSTer 확인.
 
 ## 자료 위치 (모두 저장소 밖)
 - 영문 8장판: `~/illusion_city/x/en_msx_translations/*.dsk` (zip 원본 `~/illusion_city/en_msx_translations/`)
