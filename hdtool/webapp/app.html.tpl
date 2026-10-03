@@ -131,6 +131,9 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 <div class="row dsk-only" id="fontRow"><label data-i="lFont"></label>
   <div class="seg" data-opt="font"><button data-v="file" id="fontFile" disabled></button><button data-v="rom" aria-pressed="true" id="fontRom"></button></div>
   <div class="hint" id="fontHint"></div></div>
+<div class="row cart-only" id="padRow" hidden><label data-i="lPad"></label>
+  <div class="seg" data-opt="pad8"><button data-v="off" aria-pressed="true" data-i="pad4"></button><button data-v="on" data-i="pad8"></button></div>
+  <div class="hint" data-i="padHint"></div></div>
 <div class="row" id="savesRow"><label data-i="lSaves"></label>
   <div class="seg" data-opt="saves"><button data-v="keep" aria-pressed="true" data-i="savesKeep"></button><button data-v="blank" data-i="savesBlank"></button></div></div>
 <div class="row dsk-only" id="dosRow" hidden><label data-i="lDos"></label>
@@ -190,7 +193,7 @@ ROM:中身4MB(4MB以上のフラッシュを持つ Yamanooto または ASCII16-X
 'use strict';
 const A = JSON.parse(document.getElementById('assets').textContent);
 const $ = id => document.getElementById(id);
-const opts = { target:'dsk', autoexec:'off', font:'rom', saves:'keep', dos:'ascii', readme:'on' };
+const opts = { target:'dsk', autoexec:'off', font:'rom', saves:'keep', dos:'ascii', readme:'on', pad8:'off' };
 let items = [], cls = null, result = null, roms = null, fdd = null, lang = 'ko';
 const REL_OF = { ko:'ko', en:'en8', ja:'ja' }, LANG_OF = { ko:'ko', en8:'en', ja:'ja' };
 
@@ -202,6 +205,8 @@ ko: { tabs:['한국어','영어','일본어'], title:'환영도시 HDD·ROM·플
   lAuto:'시작할 때 자동 실행', autoOn:'AUTOEXEC.BAT 사용', autoOff:'사용 안 함', autoHint:'켜면 부팅하자마자 ICITY를 실행합니다. 런처 오류 메시지가 순식간에 지나갈 수 있어 처음에는 끄는 것을 권합니다.',
   lFont:'실행할 때 글자', lSaves:'세이브', savesKeep:'올린 유저 디스크의 세이브 유지', savesBlank:'빈 세이브로 시작', lDos:'DOS 종류', dosHint:'두 종류의 파일이 모두 올라와 있어 선택합니다.',
   lReadme:'README.TXT 포함', readmeOn:'포함', readmeOff:'제외', lVolume:'볼륨 이름',
+  lPad:'ASCII16-X 파일 크기', pad4:'4MB (MiSTer 매퍼 auto)', pad8:'8MB (MiSTer OSD에서 ASCII16X 직접 선택)',
+  padHint:'MiSTer에서 OSD 매퍼를 auto로 두면 4MB 파일을 서명으로 알아봅니다. 매퍼를 ASCII16X로 직접 고르면 코어가 4MB보다 큰 파일만 플래시로 받으므로 8MB를 고르세요. 내용은 같고 뒤를 FFh로 채운 것입니다(Yamanooto 파일은 그대로 4MB).',
   make:'만들기', dlDsk:'하드디스크 이미지 내려받기 (.hd.dsk)', dlZip:'ZIP 내려받기 (SD 카드용)', dlYAMA:'Yamanooto ROM 내려받기', dlA16X:'ASCII16-X ROM 내려받기', dlD1:'디스크 1 내려받기 (D1.dsk)', dlFddZip:'ZIP 내려받기 (디스크 8장)',
   disk:n => '게임 디스크 ' + n, none:'없음', user:'유저 디스크', userNone:'없음(빈 세이브)', rel:'판', relName:{ ko:'한글판', ja:'일본어판', en8:'영어판 (MSX Translations)', en6:'영어 6장판 (지원 안 함)' },
   font:'글꼴 파일', req:'없음 (필수)', opt:'없음 (선택)',
@@ -234,6 +239,8 @@ en: { tabs:['Korean','English','Japanese'], title:'Illusion City HDD / ROM build
   lAuto:'Run at boot', autoOn:'use AUTOEXEC.BAT', autoOff:'off', autoHint:'Starts ICITY right after booting. Leave it off at first: launcher error messages may flash by too fast to read.',
   lFont:'Text at run time', lSaves:'Saves', savesKeep:'keep the saves of the user disk', savesBlank:'start with empty saves', lDos:'DOS', dosHint:'Both kinds of DOS files were added; pick one.',
   lReadme:'Include README.TXT', readmeOn:'yes', readmeOff:'no', lVolume:'Volume name',
+  lPad:'ASCII16-X file size', pad4:'4MB (MiSTer mapper auto)', pad8:'8MB (MiSTer OSD mapper set to ASCII16X)',
+  padHint:'With the MiSTer OSD mapper on auto, the 4MB file is recognised by its signature. If you pick ASCII16X by hand, the core takes the file as flash only when it is larger than 4MB: choose 8MB. Same content, padded with FFh (the Yamanooto file stays 4MB).',
   make:'Build', dlDsk:'Download hard-disk image (.hd.dsk)', dlZip:'Download ZIP (SD card)', dlYAMA:'Download Yamanooto ROM', dlA16X:'Download ASCII16-X ROM', dlD1:'Download disk 1 (D1.dsk)', dlFddZip:'Download ZIP (8 disks)',
   disk:n => 'Game disk ' + n, none:'missing', user:'User disk', userNone:'none (empty saves)', rel:'Release', relName:{ ko:'Korean', ja:'Japanese', en8:'English (MSX Translations)', en6:'English 6-disk (not supported)' },
   font:'Font file', req:'missing (required)', opt:'none (optional)',
@@ -266,6 +273,8 @@ ja: { tabs:['韓国語','英語','日本語'], title:'幻影都市 HDD・ROM作�
   lAuto:'起動時に自動実行', autoOn:'AUTOEXEC.BAT を使う', autoOff:'使わない', autoHint:'オンにすると起動直後に ICITY を実行します。ランチャーのエラーメッセージが一瞬で消えることがあるので、最初はオフをおすすめします。',
   lFont:'実行時の文字', lSaves:'セーブ', savesKeep:'入れたユーザーディスクのセーブを残す', savesBlank:'空のセーブで始める', lDos:'DOS の種類', dosHint:'両方の DOS ファイルがあるので選んでください。',
   lReadme:'README.TXT を入れる', readmeOn:'入れる', readmeOff:'入れない', lVolume:'ボリューム名',
+  lPad:'ASCII16-X ファイルのサイズ', pad4:'4MB(MiSTer マッパー auto)', pad8:'8MB(MiSTer OSD で ASCII16X を直接選ぶ場合)',
+  padHint:'MiSTer の OSD でマッパーを auto にすると、4MB のファイルを署名で認識します。マッパーを ASCII16X に直接設定すると、コアは 4MB より大きいファイルしかフラッシュとして扱わないので 8MB を選んでください。中身は同じで、後ろを FFh で埋めたものです(Yamanooto のファイルは 4MB のまま)。',
   make:'作成', dlDsk:'ハードディスクイメージをダウンロード (.hd.dsk)', dlZip:'ZIP をダウンロード (SDカード用)', dlYAMA:'Yamanooto ROM をダウンロード', dlA16X:'ASCII16-X ROM をダウンロード', dlD1:'ディスク1をダウンロード (D1.dsk)', dlFddZip:'ZIP をダウンロード (ディスク8枚)',
   disk:n => 'ゲームディスク ' + n, none:'なし', user:'ユーザーディスク', userNone:'なし(空のセーブ)', rel:'版', relName:{ ko:'韓国語版', ja:'日本語版', en8:'英語版 (MSX Translations)', en6:'英語6枚版(未対応)' },
   font:'フォントファイル', req:'なし(必須)', opt:'なし(任意)',
@@ -317,6 +326,7 @@ function segs(){
       if (b.disabled) return;
       opts[seg.dataset.opt] = b.dataset.v;
       seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+      if (seg.dataset.opt === 'pad8') return;      // both sizes are built; the choice only picks the download
       invalidate(); if (seg.dataset.opt === 'target') { applyTarget(); refresh(); } else runHint();
     }));
   });
@@ -336,7 +346,7 @@ function applyTarget(){
   const cart = opts.target === 'cart', fl = opts.target === 'fdd', dsk = !cart && !fl;
   document.querySelectorAll('.dsk-only').forEach(r => { if (r.id === 'dosRow') r.hidden = !dsk || !(cls && cls.dos['MSXDOS2.SYS'] && cls.dos['NEXTOR.SYS']); else r.hidden = !dsk; });
   $('fontRow').hidden = !dsk || rel() === 'en8';
-  $('savesRow').hidden = fl;
+  $('savesRow').hidden = fl; $('padRow').hidden = !cart;
   $('dlDsk').hidden = !dsk; $('dlZip').hidden = !dsk; $('dlYAMA').hidden = !cart; $('dlA16X').hidden = !cart; $('dlD1').hidden = !fl; $('dlFddZip').hidden = !fl;
   $('targetHint').textContent = t().tHint[opts.target];
   const fddBtn = document.querySelector('.seg[data-opt="target"] button[data-v="fdd"]'); fddBtn.disabled = rel() !== 'ko';
@@ -431,7 +441,7 @@ async function make(){
       $('make').disabled = false; return;
     }
     if (opts.target === 'cart') {
-      roms = ICITY.buildCart({ assets: A, cls, keepSaves: opts.saves === 'keep', log: Lg });
+      roms = ICITY.buildCart({ assets: A, cls, keepSaves: opts.saves === 'keep', pad8: true, log: Lg });
       $('dlYAMA').disabled = false; $('dlA16X').disabled = false;
       show('ok', L.doneCart(r === 'en8' ? r : fr, !!cls.font));
       $('make').disabled = false; return;
@@ -474,7 +484,7 @@ $('dlDsk').addEventListener('click', () => result && save(base() + (opts.autoexe
 $('dlZip').addEventListener('click', () => result && save(base() + '_SD.zip', ICITY.zipWrite(result.files), 'application/zip'));
 $('dlD1').addEventListener('click', () => fdd && save('D1.dsk', fdd[0].data));
 $('dlFddZip').addEventListener('click', () => fdd && save('ICITY_FDD.zip', ICITY.zipWrite(fdd.map(d => ({ path: 'I-City(k)(' + d.n + '-8).dsk', data: d.data }))), 'application/zip'));
-['YAMA','A16X'].forEach(ty => $('dl' + ty).addEventListener('click', () => { const x = roms && roms.find(y => y.tag === ty); if (x) save(base() + '_' + ty + '.rom', x.rom); }));
+['YAMA','A16X'].forEach(ty => $('dl' + ty).addEventListener('click', () => { const tag = ty === 'A16X' && opts.pad8 === 'on' ? 'A16X_8MB' : ty, x = roms && roms.find(y => y.tag === tag); if (x) save(base() + '_' + tag + '.rom', x.rom); }));
 })();
 </script>
 </body>
