@@ -10,6 +10,8 @@ set -e
 cd "$(dirname "$0")"
 DISKS=$1; OUT=$2; shift 2
 python3 mkdos2.py "$DISKS" "$OUT" ${FONT:+--font "$FONT"}
+# the English 8-disc release (MSX Translations) is detected by mkdos2.py; the launcher then needs -DEN8
+grep -q '"release": "en8"' "$OUT/manifest.json" && set -- -DEN8 "$@"
 ./sjasmplus "$@" -I"$OUT" --lst=icity.lst icity.asm
 mkdir -p "$OUT/root" && cp ICITY.COM "$OUT/root/"
 python3 mkhd.py "$OUT.dsk" "${SYSDIR:-sys}" "$OUT" "$OUT/root"

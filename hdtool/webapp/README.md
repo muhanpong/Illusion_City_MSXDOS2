@@ -47,7 +47,7 @@ Checked on a standard GT: cartridge without font (reads 125/125 from the start p
 only the save-list patch site differs; ending intro text through the machine's Kanji ROM), cartridge with font (only the G1/P sites
 differ) and the DOS2 image (Nextor, boots to the Japanese menus). The Japanese "Data Disk 1-4" are user disks with saves (27 slots, levels 1-36); they also load in
 the Korean and English releases.
-`make_en8_assets.py` needs the English mkdos2/cart sources of branch `illuk_EN`; the generated keys are already in `assets.json` here.
+`make_en8_assets.py` uses the English mkdos2/cart sources on this branch (merged from `illuk_EN`).
 
 ## ASCII16-X file size (2026-10-04)
 In the cartridge mode a choice "ASCII16-X file size" offers 4MB (default) or 8MB. The MiSTer core takes the 4MB file as flash by its
@@ -56,3 +56,10 @@ larger than 4MB (`memory_upload.sv`, `rom_big`), so the 8MB file is the same ROM
 entry `A16X_8MB`; the page always builds it and the choice only picks the download (`*_A16X_8MB.rom`). Same as `mkcart.py --pad8`.
 Checked: page = mkcart.py byte for byte (Korean), first 4MB = the 4MB file and the rest FFh (Korean, English, Japanese), the 8MB file
 runs in openMSX (`-romtype ASCII16-X`, start point, 125 reads, only the patch sites differ).
+
+## Python ↔ page equivalence for every release (2026-10-04)
+The command-line tools of this branch know all three releases, with the same detection as `core.js` (`is_en8`, `is_en6` refused,
+`is_ja` by the kana count): `mkdos2.py` (+ `icity.asm -DEN8` for English), `mkcart.py [--pad8] <disks> <user> <font|->`
+(`-` = no font: English always, Japanese optional, Korean refused). `test_cli.sh <work> <English disks> <Japanese disks> <user disk>
+<Japanese Kanji ROM>` builds the references with them and runs `test_en8.js` (English) and `test_ja.js` (Japanese without and with a
+font file): every chunk/save file, ICITY.COM and the 4MB/8MB ROMs byte-identical. Korean: `test_node.js`, `test_cart.js`, `test_fdd.js`.
