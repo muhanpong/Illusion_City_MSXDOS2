@@ -10,6 +10,33 @@
         DEFINE N_MIDI   19              ; logical segments for MIDI+FM mode (00-12h: module, player, song reader)
         DEFINE N_FM     16              ; logical segments for FM-only mode (E8F5=10h: the MIDI module is not loaded)
         ; -DFORCE_FM=1 makes the launcher pick FM-only mode even when enough segments are free (testing)
+    IFDEF EN8
+        ; English 8-disc build (MSX Translations): the game's own page 0 (0055h-00F7h: glyph width table and code) and page 3
+        ; (E000h-E96Eh: kernel and file tables) leave only 003Bh-0054h, 007Ah-007Fh and E96Fh-E9FFh to us, so the DOS2 stub shrinks to
+        ; an 18-byte page switch (tramp) in page 0 and the rest (hook, leave3, variables, TBL) lives in game page 3 from E96Fh.
+        DEFINE TBL      0E979h          ; logical->physical table in game page 3 (patch K1 reads it), 32 bytes
+        DEFINE INIT_N   1055h           ; LD A,N immediate inside init_map (patches_en8.py), in the loader image
+        DEFINE GSP      0E970h          ; game-side vars in game page 3 (E96Fh-E9FFh unused by the game)
+        DEFINE DTA      0E972h
+        DEFINE RSEC     0E974h
+        DEFINE RHL      0E976h
+        DEFINE RFN      0E978h
+        DEFINE HOOKA    0E999h          ; hook (F37D entry) and leave3, after TBL
+        DEFINE E8TAB    0E8B1h          ; page 0..3 -> logical segment, slot byte (4 x 2 bytes); E8FIX = number of segments cut-off
+        DEFINE E8FIX    0E8B9h
+        DEFINE PH_FC    0080h           ; DOS2-side page 0 vars: physical segment per page at entry (the game's copies zero 0080h-008Fh)
+        DEFINE PH_FD    0081h
+        DEFINE PH_FE    0082h
+        DEFINE PH_FF    0083h
+        DEFINE GFIN_AT  00F8h           ; game page 0 (free there): OUT (FFh),A / LD A,3 / OUT (FCh),A - then DOS2's page 0 continues at JRDC_AT
+        DEFINE JRDC_AT  00FEh           ; DOS2 page 0: JR DCONT_AT
+        DEFINE DCONT_AT 0090h           ; DOS2 page 0: ld sp,dos_stack / jp dos2_service
+        DEFINE LEAVE_AT 0096h           ; DOS2 page 0: way back into the game: pages 3,2,1, then A = page 0 segment, JP DOUT_AT
+        DEFINE DOUT_AT  007Ah           ; DOS2 page 0 (the default FCB area): OUT (FCh),A - then the game's page 0 continues at GCONT_AT (JP leave3)
+        DEFINE GCONT_AT 007Ch
+        DEFINE GAME_SP  0FAF8h          ; the original boot sector's stack
+        DEFINE UI_BLK_B 0DD30h          ; 38 free bytes (DD30h-DD55h): newlist, cbk
+    ELSE
         DEFINE TBL      0E960h          ; logical->physical table in game page 3 (patch K1 reads it)
         DEFINE INIT_N   0DB6h           ; LD A,N immediate inside init_map (patches.py INIT_MAP_N)
         DEFINE GSP      0E948h          ; game-side vars in game page 3 (E947-E95F unused by game)
@@ -17,22 +44,30 @@
         DEFINE RSEC     0E94Ch
         DEFINE RHL      0E94Eh
         DEFINE RFN      0E950h
+        DEFINE E8TAB    0E8EBh
+        DEFINE E8FIX    0E8F3h
         DEFINE PH_FC    0080h           ; DOS2-side page 0 vars: physical segment per page at entry
         DEFINE PH_FD    0081h
         DEFINE PH_FE    0082h
         DEFINE PH_FF    0083h
         DEFINE RES      0084h           ; result for the game (A)
+        DEFINE GAME_SP  0F300h          ; loader stack until the kernel sets FAF8h
+    ENDIF
         DEFINE WIN      8000h           ; DOS2 page 2 window
         DEFINE INP      0055h           ; slot-list input in game page 0 (FCB area)
         DEFINE GLYPHW   0E980h          ; glyph wrapper in game page 3 (E947-E9FF unused by the game)
         DEFINE GBUF_D500 0D500h         ; the game's glyph buffer
         DEFINE BDOS     0005h
         DEFINE EXTBIO   0FFCAh
-        DEFINE GAME_SP  0F300h          ; loader stack until the kernel sets FAF8h
         DEFINE dos_stack 0D700h         ; DOS2-side stack: page 3 TPA. The kernel swaps page 0 (segment 1Ah) and page 1 (ROM) during calls,
                                         ; so stack, code and parameter buffers all live in page 3 (C000-D5FF); page 2 is the window
+    IFDEF EN8
+        DEFINE FRAY_SEC 11              ; the boot sector's 8 sectors (0Bh-12h) -> 0100h; then 0D46h with 0100h pushed
+        DEFINE FRAY_CNT 8
+    ELSE
         DEFINE FRAY_SEC 14
         DEFINE FRAY_CNT 7
+    ENDIF
         DEFINE SAVE_SEC 0578h
         DEFINE EXTSEC   0600h           ; save slots 9-96 (paged slot list, patches P1-P6): sector EXTSEC + 2*(slot-8)
         DEFINE SLOTS    96              ; per disk; the save files hold them all (96KB, slot n at n*1KB)
@@ -48,7 +83,9 @@
         ld      bc,img_end-body_img
         ldir
         jp      body
+    IFNDEF EN8
 STUB_R  equ 0C000h+(stub_img-body_img)  ; relocated address of the stub image
+    ENDIF
 body_img:
         DISP 0C000h
 body:
@@ -201,11 +238,27 @@ body:
         ld      bc,32
         ldir
         ld      hl,e8eb_init            ; E8EB: page 0..3 = logical 3,2,1,0, slot 83h
-        ld      de,WIN+(0E8EBh-0C000h)
+        ld      de,WIN+(E8TAB-0C000h)
         ld      bc,8
         ldir
         ld      a,20h
-        ld      (WIN+(0E8F3h-0C000h)),a
+        ld      (WIN+(E8FIX-0C000h)),a
+    IFDEF EN8
+        ld      hl,hook_img             ; F37D entry (hook) and its way back (leave3), game page 3
+        ld      de,WIN+(HOOKA-0C000h)
+        ld      bc,hook_end-hook
+        ldir
+        ld      hl,ui_blk_img           ; slot list paging, game side, second block
+        ld      de,WIN+(UI_BLK_B-0C000h)
+        ld      bc,ui_blk_len
+        ldir
+        ld      hl,WIN+(0F37Dh-0C000h)  ; F37D: JP hook
+        ld      (hl),0C3h
+        inc     hl
+        ld      (hl),HOOKA & 0FFh
+        inc     hl
+        ld      (hl),HOOKA >> 8
+    ELSE
         ld      hl,glyph_wrap_img       ; glyph fetch wrapper at E980h (file7 patch G1 jumps here)
         ld      de,WIN+(GLYPHW-0C000h)
         ld      bc,gw_end-glyph_wrap
@@ -224,6 +277,7 @@ body:
         ld      (hl),90h
         inc     hl
         ld      (hl),00h
+    ENDIF
         ld      hl,WIN+(0FD9Ah-0C000h)  ; H.KEYI, H.TIMI -> RET (game installs its own H.KEYI)
         ld      b,10
 .hk:    ld      (hl),0C9h
@@ -244,12 +298,31 @@ body:
         call    000Ch
         ld      (vdp_ports+1),a
         ei
+    IFDEF EN8
+        ld      hl,DCONT_R              ; DOS2's own page 0 (0080h-00FFh is ours): continuation into dos2_service, leave, JR, OUT (FCh),A
+        ld      de,DCONT_AT
+        ld      bc,dcont_len
+        ldir
+        ld      hl,LEAVEDOS_R
+        ld      de,LEAVE_AT
+        ld      bc,leave_dos_len
+        ldir
+        ld      hl,JRDC_R
+        ld      de,JRDC_AT
+        ld      bc,2
+        ldir
+        ld      hl,DOUT_R
+        ld      de,DOUT_AT
+        ld      bc,2
+        ldir
+    ELSE
         ld      a,(phys+2)
         ld      (STUB_R+(stub_p2-stub)+1),a   ; start_game: OUT (FD),phys[2]
         ld      hl,STUB_R
         ld      de,0090h
         ld      bc,stub_len
         ldir
+    ENDIF
         ld      a,(phys+3)
         call    mk_page0
         ld      a,(phys+5)
@@ -302,8 +375,17 @@ body:
         ld      a,(phys+1)
         out     (0FEh),a
         ld      a,(phys+3)
-        out     (0FCh),a                ; page 0 is now the game's; we run from page 1
+        out     (0FCh),a                ; page 0 is now the game's; we run from page 3 (same code in the game's copy)
+    IFDEF EN8
+        ld      a,(phys+2)
+        out     (0FDh),a                ; page 1
+        ld      sp,GAME_SP              ; what the boot sector leaves: PUSH 0100h, JP 0D46h (copies the game's page-0 code, then RET 0100h)
+        ld      hl,0100h
+        push    hl
+        jp      0D46h
+    ELSE
         jp      start_game              ; stub: page 1 := phys[2], SP, JP 0100h
+    ENDIF
 
 ; mk_page0: A = segment. DOS2 page 0 image (with stub) + temporary interrupt handler at 0038h
 mk_page0:
@@ -316,15 +398,30 @@ mk_page0:
         ld      de,WIN+0038h
         ld      bc,int_tmp_len
         ldir
+    IFDEF EN8
+        ld      hl,GFIN_R               ; game -> DOS2 at 007Ah; DOS2 -> game continues at 00FAh (JP leave3)
+        ld      de,WIN+GFIN_AT
+        ld      bc,gfin_len
+        ldir
+        ld      hl,GCONT_R
+        ld      de,WIN+GCONT_AT
+        ld      bc,gcont_len
+        ldir
+    ELSE
         ld      hl,inp_img              ; slot-list input (cbk) at 0055h: the FCB area, never used in the game world
         ld      de,WIN+INP
         ld      bc,inp_end-inp
         ldir
+    ENDIF
         ; 0080-0087 as the original boot sector leaves them (C080h LDIR from C0FDh):
         ; 00 00 00, VDP read port, VDP write port, DISKVE address F323h, 00.
         ; the game reads (0084) as the VDP port base (palette!) and (0085) as the error-hook pointer
         ld      hl,WIN+0080h
+    IFDEF EN8
+        ld      b,16                    ; 0088h/0089h are live variables of the game's interrupt handler (E6B2h, E702h): they must start at 0
+    ELSE
         ld      b,8
+    ENDIF
 .z:     ld      (hl),0
         inc     hl
         djnz    .z
@@ -370,7 +467,7 @@ dos2_service:
         ld      a,(phys+0)
         call    put_p2
         ; physical segment of each game page at entry: TBL[E8EB[2*page]]
-        ld      hl,WIN+(0E8EBh-0C000h)
+        ld      hl,WIN+(E8TAB-0C000h)
         ld      de,PH_FC
         ld      b,4
 .ph:    ld      a,(hl)
@@ -394,6 +491,10 @@ dos2_service:
         ld      (x_fn),a
         cp      50h                     ; 50h = glyph request (own font instead of the Kanji ROM)
         jp      z,glyph_srv
+    IFDEF EN8
+        cp      51h                     ; 51h = slot list keys (page left/right), see ui_srv
+        jp      z,ui_srv
+    ENDIF
         ld      hl,(WIN+(RSEC-0C000h))
         ld      (x_sec),hl
         ld      hl,0
@@ -444,10 +545,17 @@ dos2_service:
         jr      .done
 .norm:  call    xfer
 .done:  xor     a
+    IFNDEF EN8
         ld      (RES),a
+    ENDIF
         ld      a,1
         call    put_p2
+    IFDEF EN8
+        di
+        jp      LEAVE_AT
+    ELSE
         jp      leave
+    ENDIF
 
 ; ---------------------------------------------------------------- transfer
 ; x_sec/x_off/x_cnt/x_addr/x_fn/cur_disk -> pieces of <=16KB, split at chunk and page edges
@@ -692,10 +800,17 @@ glyph_srv:
         ld      bc,32
         ldir
         xor     a
+    IFNDEF EN8
         ld      (RES),a
+    ENDIF
         ld      a,1
         call    put_p2
+    IFDEF EN8
+        di
+        jp      LEAVE_AT
+    ELSE
         jp      leave
+    ENDIF
 slot_addr:                              ; HL = WIN + 960 + slot*32
         ld      hl,(g_slot)
         add     hl,hl
@@ -1001,6 +1116,69 @@ hex2de: push    af
         inc     de
         ret
 
+    IFDEF EN8
+; ---------------------------------------------------------------- slot list paging (DOS2 side, English build)
+; The game's menu loop calls cbk (game page 3, patch P1) once per iteration; cbk asks us (function 51h) to look at the keys.
+; Keyboard row 8 and joystick 1, moved to the same bits as the Korean build's inp: bit 4 left, bit 7 keyboard right, bit 5 joystick right
+; (0 = pressed); a newly pressed left/right changes the page variable in game page 3 (0..SLOTS/8-1).  cbk redraws when it changed.
+ui_srv:
+        call    ui_inp
+        cpl
+        and     0B0h
+        ld      hl,ui_pkey
+        ld      c,(hl)
+        ld      (hl),a
+        ld      b,a
+        ld      a,c
+        cpl
+        and     b                       ; newly pressed
+        ld      e,a
+        ld      a,(phys+0)              ; game page 3 (the window may have been moved)
+        call    put_p2                  ; keeps DE and HL
+        ld      hl,WIN+(UI_PAGE-0C000h)
+        ld      a,e
+        rla
+        jr      c,.right
+        bit     6,a                     ; joystick right
+        jr      nz,.right
+        and     20h                     ; left
+        jr      z,.done
+        ld      a,(hl)
+        or      a
+        jr      z,.done
+        dec     (hl)
+        jr      .done
+.right: ld      a,(hl)
+        cp      SLOTS/8-1
+        jr      nc,.done
+        inc     (hl)
+.done:  ld      a,1
+        call    put_p2
+        di
+        jp      LEAVE_AT
+ui_pkey: db     0
+ui_inp: in      a,(0AAh)                ; keyboard row 8 (the BIOS selects its row itself before each scan)
+        and     0F0h
+        or      8
+        out     (0AAh),a
+        ld      a,15
+        out     (0A0h),a
+        in      a,(0A2h)
+        and     0BFh                    ; joystick port 1
+        out     (0A1h),a
+        ld      a,14
+        out     (0A0h),a
+        in      a,(0A2h)                ; bit 2 left, bit 3 right
+        rlca
+        rlca                            ; left -> bit 4, right -> bit 5
+        or      0CFh
+        ld      d,a
+        in      a,(0A9h)                ; keyboard: bit 4 left, bit 7 right
+        or      6Fh
+        and     d
+        ret
+    ENDIF
+
 ; ---------------------------------------------------------------- helpers
 put_p2: push    hl                      ; A = segment -> DOS2 page 2 (keeps DOS2's shadow right)
         push    de
@@ -1157,6 +1335,159 @@ fname:   ds 32,0
 body_end:
         ENT
         ASSERT body_end <= 0D600h
+    IFDEF EN8
+; ---------------------------------------------------------------- English 8-disc build: page switch, hook, leave3
+; The game's page 0 holds the DOS2 page-0 image (RST vectors, 003Bh-0054h slot-switch helpers the page-3 jump table calls) and the
+; game's own code and tables (0055h-00F7h), so only 007Ah-007Fh and 00F8h-00FFh are free there.  The page switch needs code at the
+; same address in both environments' page 0 only for its last instruction (OUT (FCh),A); everything else runs in page 3 or
+; in the part of page 0 that belongs to one environment.
+;   game -> DOS2: hook (game page 3) switches pages 2 and 1, A = 0, JP GFIN_AT (00F8h, game page 0): OUT (FFh),A / LD A,3 /
+;                 OUT (FCh),A; DOS2's page 0 continues at 00FEh: "jr DCONT_AT" -> "ld sp,dos_stack / jp dos2_service".
+;   DOS2 -> game: dos2_service -> JP LEAVE_AT (DOS2 page 0): the game's pages 3,2,1 from PH_FF..PH_FD, A = PH_FC, JP DOUT_AT
+;                 (007Ah, DOS2 page 0): OUT (FCh),A, and the game's page 0 continues at 007Ch with "jp leave3" (game page 3: SP, flags, RET).
+; DOS2's page 0: the default FCB area 007Ah-007Fh and 0080h-00FFh (the command line buffer) are ours - the same area the Korean stub used.
+; The game's copies of 0080h-008Fh start as zeros (mk_page0): the interrupt handler reads (0088h)/(0089h) as soon as the loader's EI runs.
+img_end:
+GFIN_R   equ gfin_img
+GCONT_R  equ gcont_img
+DCONT_R  equ dcont_img
+LEAVEDOS_R equ leave_dos_img
+DOUT_R   equ dout_img
+JRDC_R   equ jrdc_img
+gfin_img:
+        DISP GFIN_AT
+        out     (0FFh),a                ; A = 0: DOS2 page 3 (segment 0)
+        ld      a,3
+        out     (0FCh),a                ; DOS2 page 0 from here on (segment 3)
+gfin_end:
+        ENT
+gfin_len equ gfin_end-GFIN_AT
+        ASSERT GFIN_AT+gfin_len <= JRDC_AT
+gcont_img:
+        DISP GCONT_AT
+        jp      leave3                  ; the game's page 0 is back
+gcont_end:
+        ENT
+gcont_len equ gcont_end-GCONT_AT
+        ASSERT GCONT_AT+gcont_len <= 0080h
+dcont_img:
+        DISP DCONT_AT
+        ld      sp,dos_stack
+        jp      dos2_service
+dcont_end:
+        ENT
+dcont_len equ dcont_end-DCONT_AT
+leave_dos_img:
+        DISP LEAVE_AT
+        ld      a,(PH_FF)
+        out     (0FFh),a                ; game page 3
+        ld      a,(PH_FE)
+        out     (0FEh),a                ; page 2
+        ld      a,(PH_FD)
+        out     (0FDh),a                ; page 1
+        ld      a,(PH_FC)
+        jp      DOUT_AT
+leave_dos_end:
+        ENT
+leave_dos_len equ leave_dos_end-LEAVE_AT
+        ASSERT DCONT_AT+dcont_len <= LEAVE_AT && LEAVE_AT+leave_dos_len <= JRDC_AT
+jrdc_img:
+        DISP JRDC_AT
+        jr      DCONT_AT                ; DOS2 page 0: reached after the game's OUT (FCh),A at GFIN_AT
+jrdc_end:
+        ENT
+dout_img:
+        DISP DOUT_AT
+        out     (0FCh),a                ; the game's page 0 from here on
+dout_end:
+        ENT
+hook_img:
+        DISP HOOKA
+hook:   ld      a,i                     ; game: CALL F37D -> JP hook.  P/V = IFF2
+        di
+        push    af
+        ld      (GSP),sp
+        ld      a,c
+        cp      1Ah
+        jr      nz,.go
+        ld      (DTA),de
+        pop     af
+        jp      po,.noei
+        ei
+.noei:  xor     a
+        ret
+.go:    ld      (RSEC),de
+        ld      (RHL),hl
+        ld      (RFN),a
+        ld      a,1
+        out     (0FEh),a                ; DOS2's page 2 (segment 1) and page 1 (segment 2); the stack and this code stay in game page 3
+        inc     a
+        out     (0FDh),a
+        xor     a
+        jp      GFIN_AT
+leave3: ld      sp,(GSP)                ; from tramp (game page 0), the game's mapping is back
+        pop     af
+        ld      a,0
+        jp      po,.n
+        ei
+.n:     or      a
+        ret
+; slot list paging, game side (patches_en8.py P1-P6 call these; addresses are asserted below)
+secof:  ld      hl,SAVE_SEC             ; P5/P6: sector of slot E (D = 0); slots 9-96 live at EXTSEC + 2*(slot-8)
+        ld      a,e
+        sub     8
+        jr      c,.lo
+        ld      e,a
+        ld      hl,EXTSEC
+.lo:    add     hl,de
+        add     hl,de
+        ret
+fixno:  ld      b,a                     ; P2: number shown = page*8 + row (B is free there)
+        call    pg8
+        ld      (0D56Ah),a
+        ld      a,b
+        ret
+pg8:    ld      a,(UI_PAGE)             ; A = page*8 + B
+        add     a,a
+        add     a,a
+        add     a,a
+        add     a,b
+        ret
+fixsel: ld      b,a                     ; P3: slot selected = page*8 + row
+        call    pg8
+        ld      (5EC5h),a
+        ret
+ui_page: db     0
+UI_PAGE equ ui_page
+hook_end:
+        ENT
+        ASSERT hook_end <= 0EA00h && TBL+32 <= HOOKA
+ui_blk_img:
+        DISP UI_BLK_B
+newlist: ld     a,(5EC3h)               ; P4: opening the list; SRAM / Quick (8 slots) start on page 0
+        cp      3
+        jr      nc,.keep
+        xor     a
+        ld      (UI_PAGE),a
+.keep:  jp      5944h                   ; rebuild the 8 rows
+cbk:    ld      a,(5EC3h)               ; P1: called by the menu loop (file7 308Ah) once per iteration; medium 1 Quick, 2 SRAM, 3 disk 1, 4 user disk
+        cp      3
+        ret     c
+        ld      a,(UI_PAGE)
+        push    af
+        ld      c,51h                   ; DOS2 side looks at the keys and may change the page
+        call    0F37Dh
+        pop     bc
+        ld      a,(UI_PAGE)
+        cp      b
+        ret     z
+        jp      5944h
+ui_blk_end:
+        ENT
+ui_blk_len equ ui_blk_end-UI_BLK_B
+        ASSERT UI_BLK_B+ui_blk_len <= 0DD56h
+        ASSERT secof == 0E9D3h && fixno == 0E9E2h && fixsel == 0E9F3h && newlist == 0DD30h && cbk == 0DD3Eh   ; patches_en8.py P1-P6 use these
+    ELSE
 ; ---------------------------------------------------------------- stub (copied to 0090h everywhere)
 stub_img:
         DISP 0090h
@@ -1222,7 +1553,9 @@ stub_end:
 stub_len equ stub_end-stub
         ASSERT stub_len <= 0070h
 img_end:
+    ENDIF
 
+    IFNDEF EN8
 ; ---------------------------------------------------------------- slot-list paging (game page 3 E9AAh-E9FFh + E951h-E95Fh)
 ; The game's slot list (file9 58C0h) shows 8 slots; file9 patches P1-P6 (patches.py, fixed addresses checked below)
 ; make it show page*8+1 .. page*8+8, left/right switching pages on the disk media (SRAM / Quick stay as they are): keyboard or
@@ -1297,7 +1630,9 @@ ui2_end:
         ENT
         ASSERT ui2_end <= 0E960h        ; TBL
         ; patches.py (P1-P6) uses these addresses
+    IFNDEF EN8
         ASSERT cbk == 0E9AAh && fixno == UI_FIXNO && fixsel == UI_FIXSEL && newlist == UI_NEWLIST && secof == UI_SECOF
+    ENDIF
 
 ; ---------------------------------------------------------------- slot-list input (game page 0 0055h-007Fh)
 ; The FCB area of the DOS2 page-0 image: mk_page0 puts this in every game page-0 segment (logical 03, 05, 12h).
@@ -1331,6 +1666,7 @@ inp_end:
         ENT
         ASSERT inp_end <= 0080h
 
+    ENDIF
 ; ---------------------------------------------------------------- glyph wrapper (runs in game page 3 at E980h)
 ; replaces the body of the game's Kanji-ROM glyph reader (file7 2AB9h, patch G1 = JP E980h).
 ; Same contract as the original: in HL = glyph code, out 32 bytes at D500h; the caller does not use the
