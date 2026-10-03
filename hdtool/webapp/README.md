@@ -39,9 +39,12 @@ A tab sets the page language and the release its intro talks about; the build it
 (`classify` → `cls.release`: `ko`, `ja`, `en8`, or `en6` = the 6-disk English translation, refused). If the disks belong to another tab,
 a note offers to switch. Download names: `ICITY*` (Korean), `ICITY_EN*`, `ICITY_JA*`.
 Japanese original: same layout and patch sites as the Korean release, told apart by its text (`isJa`: Shift-JIS kana in disk 1 file 10);
-`saveSlots` decodes its place names as Shift-JIS. DOS2 and cartridge builds use the Korean path unchanged; the font is a 256KB Japanese
-Kanji ROM dump (optional for DOS2 = FONT.BIN, required for the cartridge); no floppy version. Checked: the cartridge (standard GT,
-reads 125/125 from the start point and 114/114 after loading a Data Disk 3 save, only the G1/P patch sites differ) and the DOS2 image
-(Nextor, boots to the Japanese menus). The Japanese "Data Disk 1-4" are user disks with saves (27 slots, levels 1-36); they also load in
+`saveSlots` decodes its place names as Shift-JIS. DOS2 and cartridge builds use the Korean path; the font is optional for both: the
+standard (Japanese) Kanji ROM is what the game was made for, so without a font file nothing is patched and the game reads the machine's
+Kanji ROM through its own routines (the cartridge then takes the English release's no-font path: no G1/G2, font area FFh). A 256KB
+Kanji ROM dump, if added, becomes FONT.BIN (DOS2) or the cartridge font (G1/G2, as in the Korean release). No floppy version.
+Checked on a standard GT: cartridge without font (reads 125/125 from the start point and 114/114 after loading a Data Disk 3 save,
+only the save-list patch site differs; ending intro text through the machine's Kanji ROM), cartridge with font (only the G1/P sites
+differ) and the DOS2 image (Nextor, boots to the Japanese menus). The Japanese "Data Disk 1-4" are user disks with saves (27 slots, levels 1-36); they also load in
 the Korean and English releases.
 `make_en8_assets.py` needs the English mkdos2/cart sources of branch `illuk_EN`; the generated keys are already in `assets.json` here.

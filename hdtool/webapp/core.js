@@ -344,17 +344,18 @@
     const C = en8 ? opts.assets.cartEn8 : opts.assets.cart, log = opts.log || (() => { }), cls = opts.cls;
     const disks = [];
     for (let n = 1; n <= 8; n++) { const d = cls.disks[n]; if (!d) throw new Error('game disk ' + n + ' (IPROJ0' + n + ') is missing'); disks.push(d.data.slice()); }
-    if (!en8) {
-      if (!cls.font) throw new Error('the cartridge needs the font (KANJI.rom, 262144 bytes)');
-      if (cls.font.data.length !== C.fontSize) throw new Error('font: expected ' + C.fontSize + ' bytes');
-    }
+    // the font: required for the Korean release (Kittya's KANJI.rom); optional for the Japanese original, whose game then reads the
+    // machine's own (Japanese) Kanji ROM through its original routines, as the English release always does (no G1/G2, font area FFh)
+    const fontOn = !en8 && !!cls.font;
+    if (!en8 && !fontOn && cls.release !== 'ja') throw new Error('the cartridge needs the font (KANJI.rom, 262144 bytes)');
+    if (fontOn && cls.font.data.length !== C.fontSize) throw new Error('font: expected ' + C.fontSize + ' bytes');
     let user;
     if (cls.user && opts.keepSaves !== false) { user = cls.user.data; log('user disk: ' + cls.user.name); }
     else { user = new Uint8Array(DISK_BYTES); user.set(disks[0].subarray(0, SEC), 0); user.set(new TextEncoder().encode('USERDISK'), 3); log('user disk: blank'); }
     // the boot code's own start: FRAY.DOS (Korean) or, in the English release, the boot sector's 8 sectors 0Bh-12h at 0100h
     const fray = en8 ? disks[0].slice(11 * SEC, 19 * SEC) : fat12File(disks[0], 'FRAY    DOS');
     if (fray.length !== C.frayLen) throw new Error('FRAY.DOS is ' + fray.length + ' bytes, the cartridge was built for ' + C.frayLen + ' - this is not the supported release');
-    if (!en8) {
+    if (fontOn) {
     // patch G1: the game's glyph fetch -> the cartridge's font
     const g = C.g1, o = g.sector * SEC + g.offset;
     if (!g.orig.some(h => same(disks[0], o, hexBytes(h)))) throw new Error('patch G1: the bytes on disk 1 do not match - this is not the supported release');
@@ -363,6 +364,8 @@
     const g2 = C.g2, o2 = g2.sector * SEC + g2.offset;
     if (!g2.orig.some(h => same(disks[0], o2, hexBytes(h)))) throw new Error('patch G2: the bytes on disk 1 do not match - this is not the supported release');
     disks[0].set(hexBytes(g2.new), o2);
+    }
+    if (!en8) {
     // ARMI.COM / ARMI.DOC (bonus player, disk 1 sectors 588h-597h): not used by the game and not reachable from the cartridge, so blanked
     const armi = [[0x588, hexBytes('c30301cdd102')], [0x58E, new TextEncoder().encode('Please read following;')]];
     for (const [sec, head] of armi) if (!same(disks[0], sec * SEC, head)) throw new Error('disk 1: sector ' + sec.toString(16).toUpperCase() + 'h does not start like ARMI - this is not the supported release');
@@ -376,7 +379,7 @@
       if (!same(disks[0], q, hexBytes(p.orig))) throw new Error('save-list patch at ' + hex4(p.addr) + ': the bytes on disk 1 do not match - this is not the supported release');
       disks[0].set(hexBytes(p.new), q);
     }
-    log((en8 ? 'English 8-disc release (MSX Translations): boot sector load ' : 'FRAY.DOS ') + fray.length + ' bytes, ' + (en8 ? 'save-list paging (' : 'patches G1 + G2 + save-list paging (') + C.ui.length + ') applied');
+    log((en8 ? 'English 8-disc release (MSX Translations): boot sector load ' : 'FRAY.DOS ') + fray.length + ' bytes, ' + (fontOn ? 'patches G1 + G2 + save-list paging (' : 'no font (the machine\'s Kanji ROM), save-list paging (') + C.ui.length + ') applied');
     // sectors of disk 1-8 + user disk: duplicates once, each ZX0 (raw when not smaller), none across an 8KB bank;
     // table: low word at tblLo + 2i, high byte at tblHi + i (offset | raw<<13 | bank<<14)
     const all = [...disks, user], nsec = 9 * DISK_SECTORS;
@@ -405,7 +408,7 @@
       rom.set(fray, m.frayOff);
       rom.set(lo, C.tblLo); rom.set(hi, C.tblHi);
       rom.set(blob.subarray(0, used), C.data);
-      if (!en8) rom.set(cls.font.data, C.font);
+      if (fontOn) rom.set(cls.font.data, C.font);
       // save slots: group g in flash sector g (header 'IC', g, generation 1), sector nsave-1 spare
       for (let g = 0; g < 2 * C.slots / C.group; g++) rom.set([0x49, 0x43, g, 1, 0], C.save + g * 0x10000 + 0xC000);
       [disks[0], user].forEach((d, area) => { for (let n = 0; n < 8; n++) {
