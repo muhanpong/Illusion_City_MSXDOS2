@@ -1,4 +1,5 @@
 // needs `npm i jsdom`; run: node ui_test.js icity_dsk_maker.html <zip> <userdisk> <KANJI.rom> <sys dir> <out dir> [cart|fdd]
+// English 8-disc release: <zip> may be a directory with the eight .dsk, <KANJI.rom> may be - (no font), e.g. node ui_test.js icity_dsk_maker.html <dir> <DU.dsk> - <sys dir> <out dir> [cart]
 // (cart: choose "카트리지 ROM" and download both ROMs; fdd: choose "플로피" and download D1.dsk and the zip)
 // Runs the real page (icity_dsk_maker.html) in jsdom: drops the input files, presses the buttons, saves the downloads.
 const { JSDOM } = require('jsdom'); const fs = require('fs'), zlib = require('zlib');
@@ -15,7 +16,8 @@ const [html, zipf, userf, fontf, sysdir, outdir, mode] = process.argv.slice(2);
   await new Promise(r => setTimeout(r, 200));
   const d = w.document;
   const mk = (name, path) => { const b = fs.readFileSync(path); const f = new w.File([b], name); f.arrayBuffer = async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length); return f; };
-  const files = [mk('illucity_K.zip', zipf), mk('userdisk.DSK', userf), mk('KANJI.rom', fontf)];
+  const files = fs.statSync(zipf).isDirectory() ? fs.readdirSync(zipf).map(n => mk(n, zipf + '/' + n)) : [mk('illucity_K.zip', zipf)];
+  files.push(mk('userdisk.DSK', userf)); if (fontf && fontf !== '-') files.push(mk('KANJI.rom', fontf));
   for (const n of fs.readdirSync(sysdir)) files.push(mk(n, sysdir + '/' + n));
   // zip inflate: jsdom has no DecompressionStream, so provide one backed by zlib for the test
   w.DecompressionStream = class { constructor() { let chunks = []; this.writable = new w.WritableStream ? null : null; } };
