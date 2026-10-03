@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """mkdos2.py - split the Illusion City disks into chunk files for the MSX-DOS2 launcher.
 
-usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch] [--fm-only] [--font FONT.BIN]
+usage: mkdos2.py <disk dir> <out dir> [--merge N] [--no-patch] [--fm-only] [--font FONT.BIN] [--user DISK ...]
+  --user DISK (repeatable, up to 11): more user disks; the user disk of <disk dir> is page 1 of the 96-slot user-disk save
+              list, these go to pages 2, 3, ... (their 8 slots each, sectors 0578h-0587h; nothing else of them is used)
 
 English 8-disc release (MSX Translations, disks named "Illusion City (1991)(Micro Cabin)(en)(Disk n of 8)[MSX Translations].dsk" or
 D1.dsk..D8.dsk): detected from disk 1's boot sector; patches come from patches_en8.py, the file table of disk 1 from the loader
@@ -142,6 +144,11 @@ def main():
         i = args.index("--merge"); merge = int(args[i+1]); del args[i:i+2]
     if "--fm-only" in args:                # without the MIDI-module patches (the launcher's FM-only mode does not need them)
         args.remove("--fm-only"); midi = False
+    users = []                             # more user disks -> pages 2.. of DU_0578.DAT
+    while "--user" in args:
+        i = args.index("--user"); users.append(args[i+1]); del args[i:i+2]
+    if len(users) > 11:
+        raise SystemExit("--user: at most 11 more user disks (12 pages of 8 slots)")
     font = None
     if "--font" in args:
         i = args.index("--font"); font = args[i+1]; del args[i:i+2]
@@ -211,6 +218,11 @@ def main():
             data = img[a*SEC:b*SEC]
             if sub == "SAVE":
                 data += bytes(SAVE_FILE - len(data))   # 96 slots (paged slot list, patches P1-P6)
+                if n == "U":                           # user disk k (k = 1.. from --user) on page k: slots 8k..8k+7
+                    for k, u in enumerate(users, 1):
+                        ud = open(u, "rb").read()
+                        if len(ud) != DISK_SECTORS * SEC: raise SystemExit(f"{u}: not a 720KB disk image")
+                        data = data[:k * SAVE_LEN * SEC] + ud[SAVE_START * SEC:(SAVE_START + SAVE_LEN) * SEC] + data[(k + 1) * SAVE_LEN * SEC:]
             with open(path, "wb") as f: f.write(data)
             files.append({"start": a, "end": b, "file": f"ICITY\\{sub}\\{name}"})
         total_chunks += len(chunks)

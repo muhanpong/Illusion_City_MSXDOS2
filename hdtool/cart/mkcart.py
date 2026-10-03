@@ -3,7 +3,9 @@
 more. The ASCII16-X file carries the "ASCII16X" signature at 0010h (cart.asm), so openMSX and the MiSTer core (mapper
 auto) take it as ASCII16-X with flash at 4MB.
 
-usage: mkcart.py [--pad8] <disks> <userdisk.dsk> <font|-> [outdir]
+usage: mkcart.py [--pad8] [--user DISK ...] <disks> <userdisk.dsk> <font|-> [outdir]
+  --user DISK (repeatable, up to 11): more user disks; <userdisk.dsk> is page 1 of the 96-slot user-disk save list, these go
+              to pages 2, 3, ... (their 8 slots each, sectors 0578h-0587h)
   --pad8: also write ICITY_A16X_8MB.rom, the ASCII16-X file padded with FFh to 8MB (MiSTer: the core takes a file as
           flash only when it is larger than 4MB if the OSD mapper is set to ASCII16X by hand; mapper auto reads the signature)
   <disks>: one 5898240-byte image of disks 1-8 back to back,
@@ -63,14 +65,15 @@ GROUP = 24              # slots per group (one 64KB flash sector)
 NSAVE = 9               # flash sectors for the 8 groups + 1 spare
 
 
-def save_layout(disk1, user):
-    """{ROM offset: bytes} of the save area: group g in flash sector g (generation 1), sector 8 spare (erased)."""
+def save_layout(disk1, user, more=()):
+    """{ROM offset: bytes} of the save area: group g in flash sector g (generation 1), sector 8 spare (erased).
+    disk 1's 8 slots, the user disk's on page 1 of the user-disk list and each further user disk (more) on the next page."""
     out = {}
     for g in range(2 * SLOTS // GROUP):
         out[SAVE + g * 0x10000 + 0xC000] = b'IC' + bytes([g]) + b'\x01\x00'
-    for area, disk in enumerate((disk1, user)):
+    for area, page, disk in [(0, 0, disk1), (1, 0, user)] + [(1, k, d) for k, d in enumerate(more, 1)]:
         for n in range(8):
-            slot = area * SLOTS + n
+            slot = area * SLOTS + 8 * page + n
             g, p = divmod(slot, GROUP)
             src = (SAVEFIRST + 2 * n) * 512
             out[SAVE + g * 0x10000 + (p >> 3) * 0x4000 + (p & 7) * 0x400] = disk[src:src + 1024]
@@ -287,6 +290,11 @@ def main():
     pad8 = '--pad8' in sys.argv
     if pad8:
         sys.argv.remove('--pad8')
+    more = []
+    while '--user' in sys.argv:
+        i = sys.argv.index('--user'); more.append(open(sys.argv[i + 1], 'rb').read()); del sys.argv[i:i + 2]
+    if len(more) > 11 or any(len(d) != DISK for d in more):
+        sys.exit('--user: at most 11 more user disks, 720KB each')
     if len(sys.argv) < 4:
         sys.exit(__doc__)
     disks = read_disks(sys.argv[1])
@@ -339,7 +347,7 @@ def main():
             rom[DATA:DATA + len(blob)] = blob
             if font:
                 rom[FONT:FONT + FONTSIZE] = font
-            for off, b in save_layout(disks[0], user).items():
+            for off, b in save_layout(disks[0], user, more).items():
                 rom[off:off + len(b)] = b
             out = os.path.join(outdir, f'ICITY_{tag}.rom')
             with open(out, 'wb') as f:

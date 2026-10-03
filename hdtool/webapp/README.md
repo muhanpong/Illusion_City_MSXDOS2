@@ -63,3 +63,12 @@ The command-line tools of this branch know all three releases, with the same det
 (`-` = no font: English always, Japanese optional, Korean refused). `test_cli.sh <work> <English disks> <Japanese disks> <user disk>
 <Japanese Kanji ROM>` builds the references with them and runs `test_en8.js` (English) and `test_ja.js` (Japanese without and with a
 font file): every chunk/save file, ICITY.COM and the 4MB/8MB ROMs byte-identical. Korean: `test_node.js`, `test_cart.js`, `test_fdd.js`.
+
+## Several user disks (2026-10-04)
+Up to 12 user disks: user disk k fills page k of the 96-slot user-disk save list (its 8 slots, sectors 0578h-0587h, become slots
+8k-7..8k), in the DOS2 save file `ICITY\SAVE\DU_0578.DAT` (offset (k-1)*8KB) and in the cartridge flash. The game only ever reads a
+user disk's sector 0 and its slots, so nothing else is needed: in the game, the page of the slot list (left/right) picks the user
+disk. The page takes the extra 720KB disks that are not game disks as user disks in file-name order (`cls.users`, `cls.user` = the
+first); `mkdos2.py --user DISK` / `mkcart.py --user DISK` (repeatable) add pages 2, 3, ... after the usual user disk.
+Checked: page = Python for 5 user disks (test_cli.sh), and in openMSX a cartridge with 5 user disks loads page 3 slot 4 (slot 20,
+sector 0616h) and enters disk 5 as that save says.
