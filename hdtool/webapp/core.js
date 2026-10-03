@@ -415,6 +415,9 @@
         const slot = area * C.slots + n, g = Math.floor(slot / C.group), p = slot % C.group, src = (C.saveFirst + 2 * n) * SEC;
         rom.set(d.subarray(src, src + 2 * SEC), C.save + g * 0x10000 + (p >> 3) * 0x4000 + (p & 7) * 0x400); } });
       out.push({ tag: m.tag, name: m.name, rom });
+      // opts.pad8: the ASCII16-X file also as 8MB (FFh after the 4MB): the MiSTer core takes a file as flash only when it is larger
+      // than 4MB if its OSD mapper is set to ASCII16X by hand (mapper auto reads the signature); the cartridge never looks at the size
+      if (opts.pad8 && m.tag === 'A16X') { const big = new Uint8Array(8 << 20).fill(0xFF); big.set(rom, 0); out.push({ tag: 'A16X_8MB', name: m.name + ' 8MB', rom: big }); }
     }
     log('ROM: ' + out.map(r => r.name + ' ' + (r.rom.length >> 20) + 'MB').join(', ') + ' (content ' + (C.romSize >> 20) + 'MB)');
     return out;
