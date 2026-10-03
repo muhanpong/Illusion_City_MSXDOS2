@@ -79,6 +79,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 <div class="checks" id="checks"></div>
 <div class="slots" id="slots" hidden></div>
 <pre id="notes" hidden></pre>
+<p class="sub" id="en8note" hidden>English 8-disc release (translation by <b>MSX Translations</b>) detected: needs only the eight game disks (a user disk is optional; a Japanese "Data Disk" works as one). No Kanji ROM and no KANJI.rom are needed, and the floppy version is not offered. DOS2: <code>ICITY.COM</code> + <code>ICITY\</code> (96 save slots per disk); cartridge: Yamanooto / ASCII16-X ROMs. Credit for the English translation goes to MSX Translations.</p>
 </section>
 
 <section>
@@ -90,7 +91,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 <div class="row dsk-only"><label>시작할 때 자동 실행</label>
   <div class="seg" data-opt="autoexec"><button data-v="on">AUTOEXEC.BAT 사용</button><button data-v="off" aria-pressed="true">사용 안 함</button></div>
   <div class="hint">켜면 부팅하자마자 ICITY를 실행합니다. 런처 오류 메시지가 순식간에 지나갈 수 있어 처음에는 끄는 것을 권합니다.</div></div>
-<div class="row dsk-only"><label>실행할 때 글자</label>
+<div class="row dsk-only" id="fontRow"><label>실행할 때 글자</label>
   <div class="seg" data-opt="font"><button data-v="file" id="fontFile" disabled>FONT.BIN (한글 한자 ROM 불필요)</button><button data-v="rom" aria-pressed="true">기계의 한글 한자 ROM</button></div>
   <div class="hint" id="fontHint"></div></div>
 <div class="row" id="savesRow"><label>세이브</label>
@@ -175,6 +176,8 @@ function applyTarget(){
   document.querySelectorAll('#need tr[data-t]').forEach(r => r.classList.toggle('cur', r.dataset.t === opts.target));
   const cart = opts.target === 'cart', fl = opts.target === 'fdd', dsk = !cart && !fl;
   document.querySelectorAll('.dsk-only').forEach(r => { if (r.id === 'dosRow') r.hidden = !dsk || !(cls && cls.dos['MSXDOS2.SYS'] && cls.dos['NEXTOR.SYS']); else r.hidden = !dsk; });
+  const en8 = !!(cls && cls.release === 'en8');
+  $('fontRow').hidden = !dsk || en8; $('en8note').hidden = !en8;
   $('savesRow').hidden = fl;
   $('dlDsk').hidden = !dsk; $('dlZip').hidden = !dsk; $('dlYAMA').hidden = !cart; $('dlA16X').hidden = !cart; $('dlD1').hidden = !fl; $('dlFddZip').hidden = !fl;
   $('targetHint').textContent = cart ? '실행: 카트리지만 꽂고 켜면 시작합니다(디스크 드라이브·DOS 불필요).'
@@ -194,8 +197,11 @@ async function refresh(){
   const chip = (t, v, k) => { const d = document.createElement('div'); d.className = 'chip ' + k; d.innerHTML = '<span></span><span></span>'; d.children[0].textContent = t; d.children[1].textContent = v; c.appendChild(d); };
   for (let n = 1; n <= 8; n++) chip('게임 디스크 ' + n, cls.disks[n] ? '✓' : '없음', cls.disks[n] ? 'ok' : 'bad');
   chip('유저 디스크', cls.user ? '✓ ' + cls.user.name : '없음(빈 세이브)', cls.user ? 'ok' : 'opt');
-  const needFont = opts.target !== 'dsk';
-  chip('KANJI.rom (글꼴)', cls.font ? '✓ ' + cls.font.name : needFont ? '없음 (필수)' : '없음 (선택)', cls.font ? 'ok' : needFont ? 'bad' : 'opt');
+  const en8 = cls.release === 'en8', needFont = !en8 && opts.target !== 'dsk';
+  chip('릴리스', en8 ? 'English 8-disc (MSX Translations)' : '한글판', 'ok');
+  if (!en8) chip('KANJI.rom (글꼴)', cls.font ? '✓ ' + cls.font.name : needFont ? '없음 (필수)' : '없음 (선택)', cls.font ? 'ok' : needFont ? 'bad' : 'opt');
+  const fddBtn = document.querySelector('.seg[data-opt="target"] button[data-v="fdd"]'); fddBtn.disabled = en8;
+  if (en8 && opts.target === 'fdd') setSeg('target', 'dsk');
   const hasA = !!cls.dos['MSXDOS2.SYS'], hasN = !!cls.dos['NEXTOR.SYS'], hasC = !!cls.dos['COMMAND2.COM'];
   if (opts.target === 'dsk') {
     chip('MSXDOS2.SYS', hasA ? '✓' : '없음', hasA ? 'ok' : 'opt');
@@ -205,18 +211,18 @@ async function refresh(){
   slotList();
   const notes = $('notes'); if (cls.notes.length) { notes.hidden = false; notes.textContent = cls.notes.join('\n'); } else notes.hidden = true;
   // option availability
-  $('fontFile').disabled = !cls.font;
-  if (!cls.font) setSeg('font', 'rom');
-  else if (opts.font === 'rom' && !$('fontFile').dataset.userRom) setSeg('font', 'file');
+  $('fontFile').disabled = !cls.font || en8;
+  if (!cls.font || en8) setSeg('font', 'rom');
+  else if (opts.font === 'rom' && !$('fontFile').dataset.userRom && !en8) setSeg('font', 'file');
   $('dosRow').hidden = !(hasA && hasN);
   if (hasA && !hasN) opts.dos = 'ascii'; else if (hasN && !hasA) opts.dos = 'nextor';
   applyTarget();
   const ok = [1,2,3,4,5,6,7,8].every(n => cls.disks[n]);
   const cart = opts.target === 'cart', fl = opts.target === 'fdd';
-  $('make').disabled = !ok || ((cart || fl) && !cls.font);
+  $('make').disabled = !ok || (!en8 && (cart || fl) && !cls.font);
   if (!ok) { if (items.length) show('bad', '게임 디스크 1~8이 모두 필요합니다. (디스크 라벨 IPROJ01~IPROJ08로 자동 인식합니다.)'); }
-  else if (cart && !cls.font) show('bad', '카트리지 ROM을 만들려면 KANJI.rom(키티야 님의 한글 한자 ROM 파일, 262144바이트)을 올려 주세요. 만든 카트리지는 한글 한자 ROM 없는 기계에서 실행됩니다.');
-  else if (fl && !cls.font) show('bad', '플로피판을 만들려면 KANJI.rom(키티야 님의 한글 한자 ROM 파일, 262144바이트)을 올려 주세요. 만든 디스크는 한글 한자 ROM 없는 기계에서 실행됩니다.');
+  else if (!en8 && cart && !cls.font) show('bad', '카트리지 ROM을 만들려면 KANJI.rom(키티야 님의 한글 한자 ROM 파일, 262144바이트)을 올려 주세요. 만든 카트리지는 한글 한자 ROM 없는 기계에서 실행됩니다.');
+  else if (!en8 && fl && !cls.font) show('bad', '플로피판을 만들려면 KANJI.rom(키티야 님의 한글 한자 ROM 파일, 262144바이트)을 올려 주세요. 만든 디스크는 한글 한자 ROM 없는 기계에서 실행됩니다.');
   else if (!cart && !fl && !hasA && !hasN) show('warn', 'DOS 시스템 파일이 없습니다. 만들 수는 있지만 이미지만으로는 부팅되지 않습니다.');
 }
 function slotList(){
@@ -256,7 +262,7 @@ async function make(){
     if (opts.target === 'cart') {
       roms = ICITY.buildCart({ assets: A, cls, keepSaves: opts.saves === 'keep', log: L });
       $('dlYAMA').disabled = false; $('dlA16X').disabled = false;
-      show('ok', '완료: 카트리지 ROM(Yamanooto, ASCII16-X, 각 4MB)을 내려받을 수 있습니다. 가지고 있는 카트리지 종류에 맞는 것을 고르세요. 실행할 기계에 한글 한자 ROM이 필요 없습니다.');
+      show('ok', cls.release === 'en8' ? 'Done: the cartridge ROMs (Yamanooto, ASCII16-X, 4MB each) can be downloaded; pick the one for your cartridge.' : '완료: 카트리지 ROM(Yamanooto, ASCII16-X, 각 4MB)을 내려받을 수 있습니다. 가지고 있는 카트리지 종류에 맞는 것을 고르세요. 실행할 기계에 한글 한자 ROM이 필요 없습니다.');
       $('make').disabled = false; return;
     }
     const use = Object.assign({}, cls, { dos: {} });
@@ -270,7 +276,7 @@ async function make(){
     result = { image: img.image, files, fontOn: r.fontOn, n: files.length, used: img.used, total: img.clusters, cb: img.clusterBytes };
     L('파일 ' + files.length + '개, 사용 클러스터 ' + img.used + '/' + img.clusters + ' (여유 ' + Math.round((img.clusters - img.used) * img.clusterBytes / 1048576 * 10) / 10 + 'MB)');
     $('dlDsk').disabled = false; $('dlZip').disabled = false;
-    show('ok', '완료: 하드디스크 이미지(.hd.dsk)와 ZIP을 내려받을 수 있습니다.' + (r.fontOn ? ' 실행할 기계에 한글 한자 ROM이 필요 없습니다(FONT.BIN).' : ' 이 설정으로는 한글 한자 ROM이 있는 기계에서만 글자가 나옵니다.'));
+    show('ok', cls.release === 'en8' ? 'Done: the hard-disk image (.hd.dsk) and the ZIP (SD card) can be downloaded.' : '완료: 하드디스크 이미지(.hd.dsk)와 ZIP을 내려받을 수 있습니다.' + (r.fontOn ? ' 실행할 기계에 한글 한자 ROM이 필요 없습니다(FONT.BIN).' : ' 이 설정으로는 한글 한자 ROM이 있는 기계에서만 글자가 나옵니다.'));
   } catch (e) { show('bad', '오류: ' + e.message); L('오류: ' + e.message); }
   $('make').disabled = false;
 }

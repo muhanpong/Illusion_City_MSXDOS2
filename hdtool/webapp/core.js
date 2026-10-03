@@ -10,6 +10,10 @@
   'use strict';
   const SEC = 512, DISK_BYTES = 737280, DISK_SECTORS = 1440, SYS_LEN = 14, SAVE_START = 0x578, SAVE_LEN = 0x10, SAVE_FILE = 96 * 1024;
 
+  /* English 8-disc release (MSX Translations): disk 1's boot sector reads sectors 0Bh-12h (8 sectors) to 0100h; the file table is the loader's
+     (mkdos2.py EN8_FTAB), disks 2-8 have only the INF at sector 14 (5 sectors).  patches/launcher/ROM boot blocks live in assets.en8 / assets.cartEn8. */
+  const EN8_FTAB = 11 * SEC + 0x0D18 - 0x100;
+  const isEn8 = a => a.length > 0x59 && a[0x53] === 0x21 && a[0x54] === 0x00 && a[0x55] === 0x08 && a[0x56] === 0x11 && a[0x57] === 0x0B && a[0x58] === 0x00;
   const u16 = (a, o) => a[o] | (a[o + 1] << 8);
   const hex4 = n => n.toString(16).toUpperCase().padStart(4, '0');
   const b64 = s => { if (typeof atob === 'function') { const t = atob(s), a = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) a[i] = t.charCodeAt(i); return a; } return new Uint8Array(Buffer.from(s, 'base64')); };
@@ -94,10 +98,19 @@
       else if (/^(MSXDOS2\.SYS|COMMAND2\.COM|NEXTOR\.SYS)$/.test(up)) res.dos[up] = f.data;
       else res.notes.push('ignored: ' + f.name + ' (' + f.data.length + ' bytes)');
     }
+    const d1 = res.disks[1];
+    res.release = d1 && isEn8(d1.data) ? 'en8' : 'ko';
+    for (let n = 2; n <= 8; n++) { const d = res.disks[n]; if (!d) continue;
+      const empty = !d.data.subarray(11 * SEC, 12 * SEC).some(b => b);
+      if (empty !== (res.release === 'en8')) res.notes.push('disk ' + n + ' (' + d.name + ') does not look like the same release as disk 1'); }
     return res;
   }
 
   /* ---------------------------------------------------------------- chunk analysis (mkdos2.py) */
+  function fileTableEn8(img, tag) {
+    if (tag === '1') { const out = []; for (let i = 0; i < 15; i++) out.push([img[EN8_FTAB + 2 * i], img[EN8_FTAB + 2 * i + 1]]); return out; }
+    return [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [14, 5]];
+  }
   function fileTable(img) { const t = img.subarray(11 * SEC, 12 * SEC), out = []; for (let i = 0; i < 256; i++) { const s = t[2 * i], c = t[2 * i + 1]; if (s === 0 && c === 0) break; out.push([s, c]); } return out; }
   function infRanges(img, ftab) {
     const r = [];
@@ -110,8 +123,8 @@
     for (let pos = 0x20 + namelen; pos + 3 <= used; pos += 3) { const l = inf[pos + 2]; if (l) r.push([u16(inf, pos), l]); }
     return r;
   }
-  function chunkStarts(img, tag) {
-    const ranges = []; if (tag !== 'U') { const ft = fileTable(img); for (const [s, c] of ft) if (c) ranges.push([s, c]); ranges.push(...infRanges(img, ft)); }
+  function chunkStarts(img, tag, en8) {
+    const ranges = []; if (tag !== 'U') { const ft = en8 ? fileTableEn8(img, tag) : fileTable(img); for (const [s, c] of ft) if (c) ranges.push([s, c]); ranges.push(...infRanges(img, ft)); }
     const fixed = [[0, SYS_LEN]]; if (tag === '1' || tag === 'U') fixed.push([SAVE_START, SAVE_LEN]);
     const b = new Set([0, DISK_SECTORS]);
     for (const [s, l] of ranges) { if (s + l > DISK_SECTORS) throw new Error('range outside disk ' + tag); b.add(s); b.add(s + l); }
@@ -163,8 +176,12 @@
   /* ---------------------------------------------------------------- the build */
   /* opts: {assets, cls (from classify), autoexec:boolean, autoexecText, readme:boolean, label, useFont:boolean, log(fn)} */
   function build(opts) {
-    const A = opts.assets, log = opts.log || (() => { }), cls = opts.cls;
-    const com = b64(A.com), boot = b64(A.boot);
+    const A0 = opts.assets, log = opts.log || (() => { }), cls = opts.cls;
+    const en8 = cls.release === 'en8';
+    if (en8 && !A0.en8) throw new Error('this page has no English-release data');
+    const A = en8 ? Object.assign({}, A0, A0.en8) : A0;      // com, patches, expected, readme of the release (boot sector is shared)
+    const com = b64(A.com), boot = b64(A0.boot);
+    if (en8) log('English 8-disc release (MSX Translations)');
     const disks = {};
     for (let n = 1; n <= 8; n++) { const d = cls.disks[n]; if (!d) throw new Error('game disk ' + n + ' (IPROJ0' + n + ') is missing'); disks[n] = d.data.slice(); }
     // user disk: given, or blank with disk 1's boot sector (as build_icity_hd.py does)
@@ -173,7 +190,7 @@
     else { user = new Uint8Array(DISK_BYTES); user.set(disks[1].subarray(0, SEC), 0); user.set(new TextEncoder().encode('USERDISK'), 3); log('user disk: blank'); }
     disks.U = user;
     // patches (disk 1)
-    const fontOn = !!(opts.useFont && cls.font);
+    const fontOn = !en8 && !!(opts.useFont && cls.font);
     const applied = [];
     for (const p of A.patches) {
       if (p.font && !fontOn) continue;
@@ -186,7 +203,7 @@
     const tree = { 'ICITY': [] }, icity = [], chunks = {};
     let count = 0;
     for (const tag of ['1', '2', '3', '4', '5', '6', '7', '8', 'U']) {
-      const st = chunkStarts(disks[tag], tag), exp = A.expected[tag];
+      const st = chunkStarts(disks[tag], tag, en8), exp = A.expected[tag];
       const starts = st.slice(0, -1);
       if (starts.length !== exp.length || starts.some((v, i) => v !== exp[i])) throw new Error('disk ' + tag + ': chunk layout differs from the launcher\'s tables (different release?)');
       const dn = 'D' + tag, dir = [];
@@ -314,16 +331,22 @@
   }
   /* opts: {assets, cls, keepSaves, log} -> [{tag, name, rom}] */
   function buildCart(opts) {
-    const C = opts.assets.cart, log = opts.log || (() => { }), cls = opts.cls;
+    const en8 = opts.cls.release === 'en8';
+    if (en8 && !opts.assets.cartEn8) throw new Error('this page has no English-release data');
+    const C = en8 ? opts.assets.cartEn8 : opts.assets.cart, log = opts.log || (() => { }), cls = opts.cls;
     const disks = [];
     for (let n = 1; n <= 8; n++) { const d = cls.disks[n]; if (!d) throw new Error('game disk ' + n + ' (IPROJ0' + n + ') is missing'); disks.push(d.data.slice()); }
-    if (!cls.font) throw new Error('the cartridge needs the font (KANJI.rom, 262144 bytes)');
-    if (cls.font.data.length !== C.fontSize) throw new Error('font: expected ' + C.fontSize + ' bytes');
+    if (!en8) {
+      if (!cls.font) throw new Error('the cartridge needs the font (KANJI.rom, 262144 bytes)');
+      if (cls.font.data.length !== C.fontSize) throw new Error('font: expected ' + C.fontSize + ' bytes');
+    }
     let user;
     if (cls.user && opts.keepSaves !== false) { user = cls.user.data; log('user disk: ' + cls.user.name); }
     else { user = new Uint8Array(DISK_BYTES); user.set(disks[0].subarray(0, SEC), 0); user.set(new TextEncoder().encode('USERDISK'), 3); log('user disk: blank'); }
-    const fray = fat12File(disks[0], 'FRAY    DOS');
+    // the boot code's own start: FRAY.DOS (Korean) or, in the English release, the boot sector's 8 sectors 0Bh-12h at 0100h
+    const fray = en8 ? disks[0].slice(11 * SEC, 19 * SEC) : fat12File(disks[0], 'FRAY    DOS');
     if (fray.length !== C.frayLen) throw new Error('FRAY.DOS is ' + fray.length + ' bytes, the cartridge was built for ' + C.frayLen + ' - this is not the supported release');
+    if (!en8) {
     // patch G1: the game's glyph fetch -> the cartridge's font
     const g = C.g1, o = g.sector * SEC + g.offset;
     if (!g.orig.some(h => same(disks[0], o, hexBytes(h)))) throw new Error('patch G1: the bytes on disk 1 do not match - this is not the supported release');
@@ -338,13 +361,14 @@
     const free = disks[0].slice(0x598 * SEC, 0x599 * SEC);
     if (free.some(b => b !== free[0])) throw new Error('disk 1: sector 598h is not free space - this is not the supported release');
     for (let sec = 0x588; sec <= 0x597; sec++) disks[0].set(free, sec * SEC);
+    }
     // save-list paging (file9, loaded at 4000h): 96 slots per disk
     for (const p of C.ui) {
       const q = C.file9Sec * SEC + p.addr - C.file9Base;
       if (!same(disks[0], q, hexBytes(p.orig))) throw new Error('save-list patch at ' + hex4(p.addr) + ': the bytes on disk 1 do not match - this is not the supported release');
       disks[0].set(hexBytes(p.new), q);
     }
-    log('FRAY.DOS ' + fray.length + ' bytes, patches G1 + G2 + save-list paging (' + C.ui.length + ') applied');
+    log((en8 ? 'English 8-disc release (MSX Translations): boot sector load ' : 'FRAY.DOS ') + fray.length + ' bytes, ' + (en8 ? 'save-list paging (' : 'patches G1 + G2 + save-list paging (') + C.ui.length + ') applied');
     // sectors of disk 1-8 + user disk: duplicates once, each ZX0 (raw when not smaller), none across an 8KB bank;
     // table: low word at tblLo + 2i, high byte at tblHi + i (offset | raw<<13 | bank<<14)
     const all = [...disks, user], nsec = 9 * DISK_SECTORS;
@@ -373,7 +397,7 @@
       rom.set(fray, m.frayOff);
       rom.set(lo, C.tblLo); rom.set(hi, C.tblHi);
       rom.set(blob.subarray(0, used), C.data);
-      rom.set(cls.font.data, C.font);
+      if (!en8) rom.set(cls.font.data, C.font);
       // save slots: group g in flash sector g (header 'IC', g, generation 1), sector nsave-1 spare
       for (let g = 0; g < 2 * C.slots / C.group; g++) rom.set([0x49, 0x43, g, 1, 0], C.save + g * 0x10000 + 0xC000);
       [disks[0], user].forEach((d, area) => { for (let n = 0; n < 8; n++) {
@@ -389,6 +413,7 @@
   /* opts: {assets, cls, log} -> [{n, data}] the eight game disks, disk 1 patched (font on the disk) */
   function buildFdd(opts) {
     const F = opts.assets.fdd, log = opts.log || (() => { }), cls = opts.cls;
+    if (cls.release === 'en8') throw new Error('the floppy version is only for the Korean release (the English game needs no font; use the original disks)');
     const disks = [];
     for (let n = 1; n <= 8; n++) { const d = cls.disks[n]; if (!d) throw new Error('game disk ' + n + ' (IPROJ0' + n + ') is missing'); disks.push(d.data.slice()); }
     if (!cls.font) throw new Error('the floppy version needs the font (KANJI.rom, 262144 bytes)');
@@ -471,11 +496,14 @@
      The place comes from the area table of disk 1 file 10 (loaded at 8000h, table address at 8026h): 3-character
      match first, then 2 characters, as the game's list does. */
   function saveSlots(disk1, disk) {
-    const ft = fileTable(disk1), f10 = ft[10], base = 0x8000;
-    const f = disk1.subarray(f10[0] * SEC, (f10[0] + f10[1]) * SEC);
+    const en8 = isEn8(disk1);
     const areas = [];
-    for (let o = u16(f, 0x26) - base; o >= 0 && o + 5 <= f.length && f[o]; o += 5)
-      areas.push({ code: asciiAt(f, o, 3).replace(/\0/g, ''), name: gameText(f, u16(f, o + 3) - base) });
+    if (!en8) {      // the English release's place names are dictionary-compressed text with control codes: only the scene code is shown there
+      const ft = fileTable(disk1), f10 = ft[10], base = 0x8000;
+      const f = disk1.subarray(f10[0] * SEC, (f10[0] + f10[1]) * SEC);
+      for (let o = u16(f, 0x26) - base; o >= 0 && o + 5 <= f.length && f[o]; o += 5)
+        areas.push({ code: asciiAt(f, o, 3).replace(/\0/g, ''), name: gameText(f, u16(f, o + 3) - base) });
+    }
     const out = [];
     for (let n = 0; n < 8; n++) {
       const s = disk.subarray((0x578 + 2 * n) * SEC, (0x578 + 2 * n) * SEC + 1024);
@@ -487,5 +515,5 @@
     return out;
   }
 
-  root.ICITY = { classify, build, buildCart, buildFdd, saveSlots, gameText, fat12File, zx0, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
+  root.ICITY = { isEn8, classify, build, buildCart, buildFdd, saveSlots, gameText, fat12File, zx0, makeImage, flatten, zipWrite, zipEntries, zipRead, crc32, chunkStarts, b64, hexBytes };
 })(typeof window !== 'undefined' ? window : globalThis);

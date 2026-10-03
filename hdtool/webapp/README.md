@@ -23,3 +23,12 @@ patch table, expected chunk tables; regenerate with `make_assets.py`; its `cart`
 needed - rerun it and `build_app.py` whenever `hdtool/cart/cart.asm` or `mkcart.py` changes), `build_app.py` (inlines everything -> `icity_dsk_maker.html`).
 Tests: `test_node.js` (image from the same inputs as the Python tool), `test_cases.js` (edge cases), `ui_test.js` (the real page in jsdom; `cart` as last argument for the ROM mode),
 `test_cart.js` (ROMs equal to mkcart.py output + edge cases).
+
+## English 8-disc release (MSX Translations)
+`core.js` recognises the release from disk 1's boot sector (`ICITY.isEn8`, `cls.release === 'en8'`; disks are still identified by the IPROJ0n label) and then uses
+`assets.en8` (launcher assembled with `-DEN8`, patch table of `mkdos2/patches_en8.py`, expected chunk tables, `DIST_README_EN8.txt`) for the DOS2 build and
+`assets.cartEn8` (boot blocks of `cart.asm -DEN8`, FRAY slot of 4096 bytes = disk 1 sectors 0Bh-12h, patches P1-P6) for the ROMs.  No font, no KANJI.rom, no floppy
+(`buildFdd` refuses); `chunkStarts(img, tag, en8)` reads the loader's file table / the INF at sector 14; `saveSlots` shows the scene code only (the English place names
+are dictionary-compressed text).  Generate with `SJASM=<sjasmplus> python3 make_en8_assets.py <dir: eight English .dsk + a user disk>` (adds the two keys to assets.json,
+the Korean ones are untouched), then `build_app.py`.  Test: `node test_en8.js <English disk dir> <user disk> <mkdos2.py out tree> <ICITY.COM -DEN8 for that tree> <mkcart.py out dir>`
+(every chunk/save file, the launcher and both ROMs must equal the Python tools; edge cases); `ui_test.js` takes a directory and `-` for the English release.
