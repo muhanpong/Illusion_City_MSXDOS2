@@ -200,7 +200,7 @@ const REL_OF = { ko:'ko', en:'en8', ja:'ja' }, LANG_OF = { ko:'ko', en8:'en', ja
 /* ---------------------------------------------------------------- texts: static labels (data-i) and messages, per page language */
 const T = {
 ko: { tabs:['한국어','영어','일본어'], title:'환영도시 HDD·ROM·플로피 만들기', s1:'파일 올리기', s2:'옵션', s3:'만들기',
-  dropMain:'여기로 파일을 끌어다 놓거나 눌러서 선택', dropSmall:'게임 디스크 8장(.dsk 또는 zip) · 유저 디스크(선택) · KANJI.rom(카트리지·플로피는 필수, HDD는 선택) · MSXDOS2.SYS + COMMAND2.COM 또는 NEXTOR.SYS (HDD만, zip 가능)',
+  dropMain:'여기로 파일을 끌어다 놓거나 눌러서 선택', dropSmall:'게임 디스크 8장(.dsk 또는 zip) · 유저 디스크(선택, 최대 12장: 파일 이름 순으로 세이브 목록 1~12페이지) · KANJI.rom(카트리지·플로피는 필수, HDD는 선택) · MSXDOS2.SYS + COMMAND2.COM 또는 NEXTOR.SYS (HDD만, zip 가능)',
   lTarget:'만들 것', tDsk:'DOS2 하드디스크 (HDD / SD)', tCart:'카트리지 ROM', tFdd:'플로피 (원본 디스크 8장)',
   lAuto:'시작할 때 자동 실행', autoOn:'AUTOEXEC.BAT 사용', autoOff:'사용 안 함', autoHint:'켜면 부팅하자마자 ICITY를 실행합니다. 런처 오류 메시지가 순식간에 지나갈 수 있어 처음에는 끄는 것을 권합니다.',
   lFont:'실행할 때 글자', lSaves:'세이브', savesKeep:'올린 유저 디스크의 세이브 유지', savesBlank:'빈 세이브로 시작', lDos:'DOS 종류', dosHint:'두 종류의 파일이 모두 올라와 있어 선택합니다.',
@@ -227,14 +227,15 @@ ko: { tabs:['한국어','영어','일본어'], title:'환영도시 HDD·ROM·플
   other:(r, l) => '올린 디스크는 ' + T.ko.relName[r] + '입니다. ', otherGo:l => T.ko.tabs[['ko','en','ja'].indexOf(l)] + ' 탭으로 보기',
   relNote:{ en8:'영어판(번역: MSX Translations)입니다. 게임 디스크 8장만 있으면 되고(유저 디스크는 선택, 일본어판 "Data Disk"도 유저 디스크로 쓸 수 있음) 한자 ROM·글꼴 파일이 필요 없습니다. 플로피판은 만들지 않습니다.',
     ja:'일본어판입니다. 글꼴은 일본어 한자 ROM이며, 보통 기계에 들어 있는 그 ROM을 그대로 씁니다. 한자 ROM 파일(262144바이트)은 선택: 넣으면 결과물 안에 글꼴이 들어가 한자 ROM 없는 환경에서도 돕니다. 플로피판은 만들지 않습니다(원본 디스크 그대로 동작).' },
-  slotHead:['NO','LV','장소'], slotEmpty:'미등록', slotD1:'디스크 1 세이브 (게임 목록과 같은 내용)', slotU:n => '유저 디스크 세이브: ' + n,
+  slotHead:['NO','LV','장소'], slotEmpty:'미등록', slotD1:'디스크 1 세이브 (게임 목록과 같은 내용)', slotU:(n, k, m) => m > 1 ? '유저 디스크 ' + k + ' (세이브 목록 ' + k + '페이지, 슬롯 ' + (8 * k - 7) + '~' + 8 * k + '): ' + n : '유저 디스크 세이브: ' + n,
+  users:n => n + '장 (페이지 1~' + n + ')',
   busy:'만드는 중...', err:'오류: ', doneFdd:'완료: 바뀐 디스크 1(D1.dsk)만 받거나, 8장을 ZIP으로 받을 수 있습니다. 디스크 2~8과 유저 디스크는 원래 것을 그대로 쓰면 됩니다. 실행할 기계에 한글 한자 ROM이 필요 없습니다.',
   doneCart:(r, f) => '완료: 카트리지 ROM(Yamanooto, ASCII16-X, 각 4MB)을 내려받을 수 있습니다. 가지고 있는 카트리지 종류에 맞는 것을 고르세요.' + (r === 'en8' ? '' : f ? ' 실행할 기계에 ' + T.ko.romName[r] + '이 필요 없습니다.' : ' 실행하는 기계의 ' + T.ko.romName[r] + '으로 글자를 냅니다.'),
   doneDsk:(r, f) => '완료: 하드디스크 이미지(.hd.dsk)와 ZIP을 내려받을 수 있습니다.' + (r === 'en8' ? '' : f ? ' 실행할 기계에 ' + T.ko.romName[r] + '이 필요 없습니다(FONT.BIN).' : ' 이 설정으로는 ' + T.ko.romName[r] + '이 있는 기계에서만 글자가 나옵니다.'),
   files:(n, u, t, mb) => '파일 ' + n + '개, 사용 클러스터 ' + u + '/' + t + ' (여유 ' + mb + 'MB)', zip:'이 브라우저는 zip 해제를 지원하지 않습니다. 압축을 풀어서 올려 주세요. (Chrome/Edge/Firefox/Safari 최신 버전)' },
 
 en: { tabs:['Korean','English','Japanese'], title:'Illusion City HDD / ROM builder', s1:'Add files', s2:'Options', s3:'Build',
-  dropMain:'Drop files here or click to choose', dropSmall:'the 8 game disks (.dsk or zip) · a user disk (optional) · MSXDOS2.SYS + COMMAND2.COM or NEXTOR.SYS (HDD only, zip OK). Korean / Japanese releases: a 256KB Kanji ROM file as well (see their tabs)',
+  dropMain:'Drop files here or click to choose', dropSmall:'the 8 game disks (.dsk or zip) · user disks (optional, up to 12: in file-name order, pages 1-12 of the save list) · MSXDOS2.SYS + COMMAND2.COM or NEXTOR.SYS (HDD only, zip OK). Korean / Japanese releases: a 256KB Kanji ROM file as well (see their tabs)',
   lTarget:'Output', tDsk:'DOS2 hard disk (HDD / SD)', tCart:'Cartridge ROM', tFdd:'Floppy (Korean release only)',
   lAuto:'Run at boot', autoOn:'use AUTOEXEC.BAT', autoOff:'off', autoHint:'Starts ICITY right after booting. Leave it off at first: launcher error messages may flash by too fast to read.',
   lFont:'Text at run time', lSaves:'Saves', savesKeep:'keep the saves of the user disk', savesBlank:'start with empty saves', lDos:'DOS', dosHint:'Both kinds of DOS files were added; pick one.',
@@ -261,14 +262,15 @@ en: { tabs:['Korean','English','Japanese'], title:'Illusion City HDD / ROM build
   other:r => 'The disks you added are the ' + T.en.relName[r] + ' release. ', otherGo:l => 'Show the ' + T.en.tabs[['ko','en','ja'].indexOf(l)] + ' tab',
   relNote:{ en8:'English release (translation by MSX Translations): only the 8 game disks are needed (a user disk is optional; a Japanese "Data Disk" works as one). No Kanji ROM and no font file are needed, and the floppy version is not offered.',
     ja:'Japanese release: its font is the standard Japanese Kanji ROM that the machine normally has. A Kanji ROM file (262144 bytes) is optional: added, the font goes into the output and it also runs without a Kanji ROM. No floppy version (the original disks work as they are).' },
-  slotHead:['NO','LV','Place'], slotEmpty:'empty', slotD1:'Disk 1 saves (as listed in the game)', slotU:n => 'User disk saves: ' + n,
+  slotHead:['NO','LV','Place'], slotEmpty:'empty', slotD1:'Disk 1 saves (as listed in the game)', slotU:(n, k, m) => m > 1 ? 'User disk ' + k + ' (save list page ' + k + ', slots ' + (8 * k - 7) + '-' + 8 * k + '): ' + n : 'User disk saves: ' + n,
+  users:n => n + ' (pages 1-' + n + ')',
   busy:'Building...', err:'Error: ', doneFdd:'Done: download the changed disk 1 (D1.dsk) or all 8 disks as a ZIP. Disks 2-8 and the user disk stay as they are. No Korean Kanji ROM needed.',
   doneCart:(r, f) => 'Done: the cartridge ROMs (Yamanooto, ASCII16-X, 4MB each) can be downloaded; pick the one for your cartridge.' + (r === 'en8' ? '' : f ? ' The machine needs no ' + T.en.romName[r] + '.' : ' The text comes from the machine\'s ' + T.en.romName[r] + '.'),
   doneDsk:(r, f) => 'Done: the hard-disk image (.hd.dsk) and the ZIP (SD card) can be downloaded.' + (r === 'en8' ? '' : f ? ' The machine needs no ' + T.en.romName[r] + ' (FONT.BIN).' : ' With this setting the text only shows on a machine with a ' + T.en.romName[r] + '.'),
   files:(n, u, t, mb) => n + ' files, clusters used ' + u + '/' + t + ' (' + mb + 'MB free)', zip:'This browser cannot unpack zip files. Please unzip them first (current Chrome/Edge/Firefox/Safari can).' },
 
 ja: { tabs:['韓国語','英語','日本語'], title:'幻影都市 HDD・ROM作成ツール', s1:'ファイルを入れる', s2:'オプション', s3:'作成',
-  dropMain:'ここにファイルをドロップ、またはクリックして選択', dropSmall:'ゲームディスク8枚(.dsk または zip)・ユーザーディスク(任意)・漢字ROMファイル(256KB、任意)・MSXDOS2.SYS + COMMAND2.COM または NEXTOR.SYS(HDDのみ、zip可)',
+  dropMain:'ここにファイルをドロップ、またはクリックして選択', dropSmall:'ゲームディスク8枚(.dsk または zip)・ユーザーディスク(任意、最大12枚:ファイル名順にセーブ一覧の1〜12ページ)・漢字ROMファイル(256KB、任意)・MSXDOS2.SYS + COMMAND2.COM または NEXTOR.SYS(HDDのみ、zip可)',
   lTarget:'作るもの', tDsk:'DOS2 ハードディスク (HDD / SD)', tCart:'カートリッジROM', tFdd:'フロッピー(韓国語版のみ)',
   lAuto:'起動時に自動実行', autoOn:'AUTOEXEC.BAT を使う', autoOff:'使わない', autoHint:'オンにすると起動直後に ICITY を実行します。ランチャーのエラーメッセージが一瞬で消えることがあるので、最初はオフをおすすめします。',
   lFont:'実行時の文字', lSaves:'セーブ', savesKeep:'入れたユーザーディスクのセーブを残す', savesBlank:'空のセーブで始める', lDos:'DOS の種類', dosHint:'両方の DOS ファイルがあるので選んでください。',
@@ -295,7 +297,8 @@ ja: { tabs:['韓国語','英語','日本語'], title:'幻影都市 HDD・ROM作�
   other:r => '入れたディスクは' + T.ja.relName[r] + 'です。', otherGo:l => T.ja.tabs[['ko','en','ja'].indexOf(l)] + 'タブで見る',
   relNote:{ en8:'英語版(翻訳:MSX Translations)です。ゲームディスク8枚だけで作れます(ユーザーディスクは任意、日本語版の「データディスク」も使えます)。漢字ROM・フォントファイルは不要で、フロッピー版はありません。',
     ja:'日本語版です。文字は機械に普通に入っている漢字ROMをそのまま使います。漢字ROMファイル(262144バイト)は任意で、入れると結果の中にフォントが入り、漢字ROMのない環境でも動きます。フロッピー版はありません(元のディスクのままで動きます)。' },
-  slotHead:['NO','LV','場所'], slotEmpty:'未登録', slotD1:'ディスク1のセーブ(ゲームの一覧と同じ)', slotU:n => 'ユーザーディスクのセーブ:' + n,
+  slotHead:['NO','LV','場所'], slotEmpty:'未登録', slotD1:'ディスク1のセーブ(ゲームの一覧と同じ)', slotU:(n, k, m) => m > 1 ? 'ユーザーディスク' + k + '(セーブ一覧' + k + 'ページ、スロット' + (8 * k - 7) + '〜' + 8 * k + '):' + n : 'ユーザーディスクのセーブ:' + n,
+  users:n => n + '枚(ページ1〜' + n + ')',
   busy:'作成中...', err:'エラー:', doneFdd:'完了:変更したディスク1(D1.dsk)だけ、または8枚を ZIP でダウンロードできます。ディスク2〜8とユーザーディスクは元のままで使えます。韓国語漢字ROMは不要です。',
   doneCart:(r, f) => '完了:カートリッジROM(Yamanooto、ASCII16-X、各4MB)をダウンロードできます。お持ちのカートリッジに合うものを選んでください。' + (r === 'en8' ? '' : f ? '実行する機械に' + T.ja.romName[r] + 'は不要です。' : '文字は実行する機械の' + T.ja.romName[r] + 'で表示します。'),
   doneDsk:(r, f) => '完了:ハードディスクイメージ(.hd.dsk)と ZIP をダウンロードできます。' + (r === 'en8' ? '' : f ? '実行する機械に' + T.ja.romName[r] + 'は不要です(FONT.BIN)。' : 'この設定では' + T.ja.romName[r] + 'のある機械でのみ文字が表示されます。'),
@@ -377,7 +380,7 @@ async function refresh(){
   const L = t(), c = $('checks'); c.innerHTML = '';
   const chip = (a, v, k) => { const d = document.createElement('div'); d.className = 'chip ' + k; d.innerHTML = '<span></span><span></span>'; d.children[0].textContent = a; d.children[1].textContent = v; c.appendChild(d); };
   for (let n = 1; n <= 8; n++) chip(L.disk(n), cls.disks[n] ? '✓' : L.none, cls.disks[n] ? 'ok' : 'bad');
-  chip(L.user, cls.user ? '✓ ' + cls.user.name : L.userNone, cls.user ? 'ok' : 'opt');
+  chip(L.user, !cls.user ? L.userNone : cls.users.length > 1 ? '✓ ' + L.users(cls.users.length) : '✓ ' + cls.user.name, cls.user ? 'ok' : 'opt');
   const r = cls.disks[1] ? cls.release : null, en8 = rel() === 'en8', fr = fontRel();
   if (r) chip(L.rel, L.relName[r], r === 'en6' ? 'bad' : 'ok');
   if (rel() !== 'ko' && opts.target === 'fdd') setSeg('target', 'dsk');
@@ -408,7 +411,7 @@ async function refresh(){
 function slotList(){
   const L = t(), box = $('slots'); box.innerHTML = '';
   if (!cls || !cls.disks[1]) { box.hidden = true; return; }
-  const one = (title, disk) => {
+  const one = (title, disk, off) => {
     let rows;
     try { rows = ICITY.saveSlots(cls.disks[1].data, disk); } catch (e) { return; }
     const d = document.createElement('div'), h = document.createElement('h3'), tb = document.createElement('table');
@@ -416,13 +419,13 @@ function slotList(){
     const hr = document.createElement('tr'); L.slotHead.forEach((v, i) => { const th = document.createElement('th'); th.textContent = v; if (i < 2) th.className = 'num'; hr.appendChild(th); }); tb.appendChild(hr);
     for (const x of rows) {
       const tr = document.createElement('tr');
-      [[x.n, 'num'], [x.valid ? x.lv : '--', 'num'], [x.valid ? x.place : L.slotEmpty, x.valid ? '' : 'e']].forEach(([v, k]) => { const td = document.createElement('td'); td.textContent = v; if (k) td.className = k; tr.appendChild(td); });
+      [[x.n + (off || 0), 'num'], [x.valid ? x.lv : '--', 'num'], [x.valid ? x.place : L.slotEmpty, x.valid ? '' : 'e']].forEach(([v, k]) => { const td = document.createElement('td'); td.textContent = v; if (k) td.className = k; tr.appendChild(td); });
       tb.appendChild(tr);
     }
     d.appendChild(tb); box.appendChild(d);
   };
   one(L.slotD1, cls.disks[1].data);
-  if (cls.user) one(L.slotU(cls.user.name), cls.user.data);
+  cls.users.forEach((u, k) => one(L.slotU(u.name, k + 1, cls.users.length), u.data, 8 * k));      // numbered as in the game's list
   box.hidden = !box.children.length;
 }
 function show(kind, text){ const m = $('msg'); m.className = kind === 'bad' ? 'bad' : kind === 'ok' ? 'ok' : ''; m.style.color = kind === 'warn' ? 'var(--warn)' : ''; m.textContent = text; }
