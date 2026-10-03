@@ -99,10 +99,10 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 <div class="tbl"><table class="need">
 <tr><th>作るもの</th><th>実行のしかた</th><th>実行する機械の漢字ROM</th><th>作成時の漢字ROMファイル</th></tr>
 <tr data-t="dsk"><td>DOS2 ハードディスク (HDD / SD)</td><td>MSX-DOS2・Nextor のハードディスクやSDカードから ICITY.COM</td><td class="y">不要(FONT.BIN を入れた場合)<br><span style="color:var(--warn)">入れない場合は必要</span></td><td>任意(FONT.BIN用)</td></tr>
-<tr data-t="cart"><td>カートリッジROM</td><td>Yamanooto・ASCII16-X カートリッジを挿して電源を入れる</td><td class="y">不要</td><td>必須</td></tr>
+<tr data-t="cart"><td>カートリッジROM</td><td>Yamanooto・ASCII16-X カートリッジを挿して電源を入れる</td><td class="y">不要(漢字ROMファイルを入れた場合)<br><span style="color:var(--warn)">入れない場合は必要</span></td><td>任意(ROM内フォント用)</td></tr>
 <tr data-t="fdd"><td>フロッピー</td><td class="x" colspan="3">対象外:日本語版は元のディスクのまま漢字ROMのある機械で動きます</td></tr>
 </table></div>
-<p class="sub" style="margin-top:-8px">漢字ROMファイル(262144バイト)は、お持ちの MSX(FS-A1GT など)の漢字ROMを吸い出したものです。作成時にフォントを取り出して結果に入れるだけで、実行する機械とは関係ありません。</p>
+<p class="sub" style="margin-top:-8px">漢字ROMファイル(262144バイト)は、お持ちの MSX(FS-A1GT など)の漢字ROMを吸い出したものです。なくても作れます(そのときは実行する機械の漢字ROMで表示)。入れると結果の中にフォントが入り、漢字ROMのない環境でも動きます。</p>
 <p class="sub">原作:マイクロキャビン(1991)。このツールは、キティヤさんによる韓国語版のために作ったものを日本語版でも使えるようにしたものです。</p>
 </div>
 
@@ -176,7 +176,7 @@ English translation: MSX Translations. No game data, DOS files or fonts are insi
 <footer data-lang="ja" hidden>
 ツールのバージョン 2026-10-03 — 英語版(MSX Translations 8枚)と日本語版に対応しました。<br>
 HDD:16MB の FAT12 ハードディスクイメージ(ヘッダなしの生セクタ)。openMSX:IDE・Nextor 拡張を付けて <code>hda ICITY.hd.dsk</code>。MiSTer:中身は同じなので拡張子を <code>.vhd</code> に変えるだけです。ZIP:中の ICITY.COM と ICITY フォルダをSDカードのルートにコピーしてください。セーブはディスクごとに96スロット(スロット一覧で左右キーまたはジョイスティック)。
-ROM:中身4MB(4MB以上のフラッシュを持つ Yamanooto または ASCII16-X カートリッジ用、マッパーごとに1ファイル、作成に数十秒)。ASCII16-X のファイルは 0010h に "ASCII16X" の署名があり、openMSX と MiSTer コア(マッパー auto)がフラッシュマッパーとして認識します。カートリッジを挿して電源を入れるだけで始まり、文字はROM内のフォントで表示され(実行する機械に漢字ROM不要)、ディスク1・ユーザーディスクのセーブはカートリッジのフラッシュに書き込まれます。openMSX:<code>-carta ICITY_YAMA.rom -romtype Yamanooto</code>。
+ROM:中身4MB(4MB以上のフラッシュを持つ Yamanooto または ASCII16-X カートリッジ用、マッパーごとに1ファイル、作成に数十秒)。ASCII16-X のファイルは 0010h に "ASCII16X" の署名があり、openMSX と MiSTer コア(マッパー auto)がフラッシュマッパーとして認識します。カートリッジを挿して電源を入れるだけで始まります。漢字ROMファイルを入れて作った場合は文字をROM内のフォントで表示し(実行する機械に漢字ROM不要)、入れずに作った場合は機械の漢字ROMを使います。ディスク1・ユーザーディスクのセーブはカートリッジのフラッシュに書き込まれます。openMSX:<code>-carta ICITY_YAMA.rom -romtype Yamanooto</code>。
 「データディスク1〜4」はユーザーディスクとしてそのまま使えます。ゲームデータ・DOSファイル・フォントはこのページに含まれていません。含まれているのはランチャー(ICITY.COM)、ブートセクタ、カートリッジのブートコードだけです。
 </footer>
 </main>
@@ -208,10 +208,11 @@ ko: { tabs:['한국어','영어','일본어'], title:'환영도시 HDD·ROM·플
   romName:{ ko:'한글 한자 ROM', ja:'한자 ROM(일본어)' }, fileName:{ ko:'KANJI.rom(키티야 님의 한글 한자 ROM 파일, 262144바이트)', ja:'일본어 한자 ROM 파일(262144바이트, 기계에서 덤프한 것)' },
   fontFile:r => 'FONT.BIN (' + T.ko.romName[r] + ' 불필요)', fontRom:r => '기계의 ' + T.ko.romName[r],
   tHint:{ cart:'실행: 카트리지만 꽂고 켜면 시작합니다(디스크 드라이브·DOS 불필요).', fdd:'실행: 원본처럼 플로피 8장(+ 유저 디스크)으로 실행합니다. 바뀌는 것은 디스크 1뿐입니다.', dsk:'실행: MSX-DOS2(또는 Nextor)가 있는 하드디스크·SD 카드에서 ICITY.COM을 실행합니다.' },
-  runCart:r => r === 'en8' ? '한자 ROM: 필요 없음' : T.ko.romName[r] + ': 필요 없음 (글꼴이 카트리지 안에 들어감)',
+  runCart:(r, f) => r === 'ja' && !f ? T.ko.runRom(r) : r === 'en8' ? '한자 ROM: 필요 없음' : T.ko.romName[r] + ': 필요 없음 (글꼴이 카트리지 안에 들어감)',
   runFdd:'한글 한자 ROM: 필요 없음 (글꼴이 디스크 1에 들어감). 단, 512KB 매퍼 기계(FS-A1GT 등)일 때. 256KB 기계에서는 필요.',
   runFile:r => T.ko.romName[r] + ': 필요 없음 (글꼴을 ICITY\\FONT.BIN에서 읽음)', runRom:r => r === 'en8' ? '한자 ROM: 필요 없음 (영어판은 한자 ROM을 쓰지 않음)' : T.ko.romName[r] + ': 필요 (실행하는 기계의 ' + T.ko.romName[r] + '에서 글자를 읽음. 없으면 글자가 깨짐)',
   makeDsk:(r, f) => r === 'en8' ? '만들 때: 게임 디스크 8장만 있으면 됩니다.' : f ? '만들 때: 올린 글꼴 파일로 FONT.BIN을 만듭니다.' : '만들 때: ' + T.ko.fileName[r] + '을 올리면 FONT.BIN을 넣을 수 있습니다.',
+  makeCartJa:'만들 때: 한자 ROM 파일은 선택입니다. 넣으면 글꼴이 카트리지 안에 들어가고, 없으면 실행하는 기계의 한자 ROM을 씁니다.',
   makeNeed:r => r === 'en8' ? '만들 때: 게임 디스크 8장만 있으면 됩니다.' : '만들 때: ' + T.ko.fileName[r] + '이 필요합니다. 글꼴을 가져오는 데만 씁니다.',
   fontHintNo:r => 'FONT.BIN을 쓰려면 ' + T.ko.fileName[r] + '을 올리세요. 지금은 실행하는 기계에 ' + T.ko.romName[r] + '이 있어야 합니다.',
   fontHintFile:r => '실행하는 기계에 ' + T.ko.romName[r] + '이 없어도 됩니다.', fontHintRom:r => '실행하는 기계에 ' + T.ko.romName[r] + '이 있어야 합니다(없으면 글자가 깨짐).',
@@ -220,10 +221,10 @@ ko: { tabs:['한국어','영어','일본어'], title:'환영도시 HDD·ROM·플
   noDos:'DOS 시스템 파일이 없습니다. 만들 수는 있지만 이미지만으로는 부팅되지 않습니다.', en6:'영어 6장판은 지원하지 않습니다. MSX Translations의 8장판을 올려 주세요.',
   other:(r, l) => '올린 디스크는 ' + T.ko.relName[r] + '입니다. ', otherGo:l => T.ko.tabs[['ko','en','ja'].indexOf(l)] + ' 탭으로 보기',
   relNote:{ en8:'영어판(번역: MSX Translations)입니다. 게임 디스크 8장만 있으면 되고(유저 디스크는 선택, 일본어판 "Data Disk"도 유저 디스크로 쓸 수 있음) 한자 ROM·글꼴 파일이 필요 없습니다. 플로피판은 만들지 않습니다.',
-    ja:'일본어판입니다. 글꼴은 일본어 한자 ROM입니다. 카트리지에는 기계에서 덤프한 한자 ROM 파일(262144바이트)이 필요합니다. 플로피판은 만들지 않습니다(원본 디스크 그대로 동작).' },
+    ja:'일본어판입니다. 글꼴은 일본어 한자 ROM이며, 보통 기계에 들어 있는 그 ROM을 그대로 씁니다. 한자 ROM 파일(262144바이트)은 선택: 넣으면 결과물 안에 글꼴이 들어가 한자 ROM 없는 환경에서도 돕니다. 플로피판은 만들지 않습니다(원본 디스크 그대로 동작).' },
   slotHead:['NO','LV','장소'], slotEmpty:'미등록', slotD1:'디스크 1 세이브 (게임 목록과 같은 내용)', slotU:n => '유저 디스크 세이브: ' + n,
   busy:'만드는 중...', err:'오류: ', doneFdd:'완료: 바뀐 디스크 1(D1.dsk)만 받거나, 8장을 ZIP으로 받을 수 있습니다. 디스크 2~8과 유저 디스크는 원래 것을 그대로 쓰면 됩니다. 실행할 기계에 한글 한자 ROM이 필요 없습니다.',
-  doneCart:r => '완료: 카트리지 ROM(Yamanooto, ASCII16-X, 각 4MB)을 내려받을 수 있습니다. 가지고 있는 카트리지 종류에 맞는 것을 고르세요.' + (r === 'en8' ? '' : ' 실행할 기계에 ' + T.ko.romName[r] + '이 필요 없습니다.'),
+  doneCart:(r, f) => '완료: 카트리지 ROM(Yamanooto, ASCII16-X, 각 4MB)을 내려받을 수 있습니다. 가지고 있는 카트리지 종류에 맞는 것을 고르세요.' + (r === 'en8' ? '' : f ? ' 실행할 기계에 ' + T.ko.romName[r] + '이 필요 없습니다.' : ' 실행하는 기계의 ' + T.ko.romName[r] + '으로 글자를 냅니다.'),
   doneDsk:(r, f) => '완료: 하드디스크 이미지(.hd.dsk)와 ZIP을 내려받을 수 있습니다.' + (r === 'en8' ? '' : f ? ' 실행할 기계에 ' + T.ko.romName[r] + '이 필요 없습니다(FONT.BIN).' : ' 이 설정으로는 ' + T.ko.romName[r] + '이 있는 기계에서만 글자가 나옵니다.'),
   files:(n, u, t, mb) => '파일 ' + n + '개, 사용 클러스터 ' + u + '/' + t + ' (여유 ' + mb + 'MB)', zip:'이 브라우저는 zip 해제를 지원하지 않습니다. 압축을 풀어서 올려 주세요. (Chrome/Edge/Firefox/Safari 최신 버전)' },
 
@@ -239,10 +240,11 @@ en: { tabs:['Korean','English','Japanese'], title:'Illusion City HDD / ROM build
   romName:{ ko:'Korean Kanji ROM', ja:'Kanji ROM' }, fileName:{ ko:'KANJI.rom (Kittya\'s Korean Kanji ROM file, 262144 bytes)', ja:'a Kanji ROM file (262144 bytes, dumped from a Japanese MSX)' },
   fontFile:r => 'FONT.BIN (no ' + T.en.romName[r] + ' needed)', fontRom:r => 'the machine\'s ' + T.en.romName[r],
   tHint:{ cart:'Run: insert the cartridge and switch on (no disk drive, no DOS).', fdd:'Run: from the 8 floppies (+ user disk) as the original; only disk 1 changes.', dsk:'Run: ICITY.COM from a hard disk or SD card with MSX-DOS2 (or Nextor).' },
-  runCart:r => r === 'en8' ? 'Kanji ROM: not needed' : T.en.romName[r] + ': not needed (the font is inside the cartridge)',
+  runCart:(r, f) => r === 'ja' && !f ? T.en.runRom(r) : r === 'en8' ? 'Kanji ROM: not needed' : T.en.romName[r] + ': not needed (the font is inside the cartridge)',
   runFdd:'Korean Kanji ROM: not needed (the font goes onto disk 1), on a 512KB-mapper machine (FS-A1GT etc.); a 256KB machine needs it.',
   runFile:r => T.en.romName[r] + ': not needed (the font is read from ICITY\\FONT.BIN)', runRom:r => r === 'en8' ? 'Kanji ROM: not needed (the English game does not use it)' : T.en.romName[r] + ': needed (the text is read from the machine\'s ' + T.en.romName[r] + '; garbled without it)',
   makeDsk:(r, f) => r === 'en8' ? 'To build: just the 8 game disks.' : f ? 'To build: FONT.BIN is made from the font file you added.' : 'To build: add ' + T.en.fileName[r] + ' to include FONT.BIN.',
+  makeCartJa:'To build: a Kanji ROM file is optional. Added, its font goes into the cartridge; without it the machine\'s Kanji ROM is used.',
   makeNeed:r => r === 'en8' ? 'To build: just the 8 game disks.' : 'To build: ' + T.en.fileName[r] + ' is required (only its font is used).',
   fontHintNo:r => 'Add ' + T.en.fileName[r] + ' to use FONT.BIN. As it is, the machine needs a ' + T.en.romName[r] + '.',
   fontHintFile:r => 'The machine does not need a ' + T.en.romName[r] + '.', fontHintRom:r => 'The machine needs a ' + T.en.romName[r] + ' (text is garbled without it).',
@@ -251,15 +253,15 @@ en: { tabs:['Korean','English','Japanese'], title:'Illusion City HDD / ROM build
   noDos:'No DOS system files: the image can be built but will not boot by itself.', en6:'The 6-disk English translation is not supported; please use the 8-disk MSX Translations release.',
   other:r => 'The disks you added are the ' + T.en.relName[r] + ' release. ', otherGo:l => 'Show the ' + T.en.tabs[['ko','en','ja'].indexOf(l)] + ' tab',
   relNote:{ en8:'English release (translation by MSX Translations): only the 8 game disks are needed (a user disk is optional; a Japanese "Data Disk" works as one). No Kanji ROM and no font file are needed, and the floppy version is not offered.',
-    ja:'Japanese release: its font is the Japanese Kanji ROM. The cartridge needs a Kanji ROM file (262144 bytes) dumped from a machine. No floppy version (the original disks work as they are).' },
+    ja:'Japanese release: its font is the standard Japanese Kanji ROM that the machine normally has. A Kanji ROM file (262144 bytes) is optional: added, the font goes into the output and it also runs without a Kanji ROM. No floppy version (the original disks work as they are).' },
   slotHead:['NO','LV','Place'], slotEmpty:'empty', slotD1:'Disk 1 saves (as listed in the game)', slotU:n => 'User disk saves: ' + n,
   busy:'Building...', err:'Error: ', doneFdd:'Done: download the changed disk 1 (D1.dsk) or all 8 disks as a ZIP. Disks 2-8 and the user disk stay as they are. No Korean Kanji ROM needed.',
-  doneCart:r => 'Done: the cartridge ROMs (Yamanooto, ASCII16-X, 4MB each) can be downloaded; pick the one for your cartridge.' + (r === 'en8' ? '' : ' The machine needs no ' + T.en.romName[r] + '.'),
+  doneCart:(r, f) => 'Done: the cartridge ROMs (Yamanooto, ASCII16-X, 4MB each) can be downloaded; pick the one for your cartridge.' + (r === 'en8' ? '' : f ? ' The machine needs no ' + T.en.romName[r] + '.' : ' The text comes from the machine\'s ' + T.en.romName[r] + '.'),
   doneDsk:(r, f) => 'Done: the hard-disk image (.hd.dsk) and the ZIP (SD card) can be downloaded.' + (r === 'en8' ? '' : f ? ' The machine needs no ' + T.en.romName[r] + ' (FONT.BIN).' : ' With this setting the text only shows on a machine with a ' + T.en.romName[r] + '.'),
   files:(n, u, t, mb) => n + ' files, clusters used ' + u + '/' + t + ' (' + mb + 'MB free)', zip:'This browser cannot unpack zip files. Please unzip them first (current Chrome/Edge/Firefox/Safari can).' },
 
 ja: { tabs:['韓国語','英語','日本語'], title:'幻影都市 HDD・ROM作成ツール', s1:'ファイルを入れる', s2:'オプション', s3:'作成',
-  dropMain:'ここにファイルをドロップ、またはクリックして選択', dropSmall:'ゲームディスク8枚(.dsk または zip)・ユーザーディスク(任意)・漢字ROMファイル(256KB、カートリッジは必須、HDDは任意)・MSXDOS2.SYS + COMMAND2.COM または NEXTOR.SYS(HDDのみ、zip可)',
+  dropMain:'ここにファイルをドロップ、またはクリックして選択', dropSmall:'ゲームディスク8枚(.dsk または zip)・ユーザーディスク(任意)・漢字ROMファイル(256KB、任意)・MSXDOS2.SYS + COMMAND2.COM または NEXTOR.SYS(HDDのみ、zip可)',
   lTarget:'作るもの', tDsk:'DOS2 ハードディスク (HDD / SD)', tCart:'カートリッジROM', tFdd:'フロッピー(韓国語版のみ)',
   lAuto:'起動時に自動実行', autoOn:'AUTOEXEC.BAT を使う', autoOff:'使わない', autoHint:'オンにすると起動直後に ICITY を実行します。ランチャーのエラーメッセージが一瞬で消えることがあるので、最初はオフをおすすめします。',
   lFont:'実行時の文字', lSaves:'セーブ', savesKeep:'入れたユーザーディスクのセーブを残す', savesBlank:'空のセーブで始める', lDos:'DOS の種類', dosHint:'両方の DOS ファイルがあるので選んでください。',
@@ -270,10 +272,11 @@ ja: { tabs:['韓国語','英語','日本語'], title:'幻影都市 HDD・ROM作�
   romName:{ ko:'韓国語漢字ROM', ja:'漢字ROM' }, fileName:{ ko:'KANJI.rom(キティヤさんの韓国語漢字ROMファイル、262144バイト)', ja:'漢字ROMファイル(262144バイト、実機から吸い出したもの)' },
   fontFile:r => 'FONT.BIN(' + T.ja.romName[r] + '不要)', fontRom:r => '機械の' + T.ja.romName[r],
   tHint:{ cart:'実行:カートリッジを挿して電源を入れるだけです(ディスクドライブ・DOS 不要)。', fdd:'実行:元と同じくフロッピー8枚(+ユーザーディスク)で。変わるのはディスク1だけです。', dsk:'実行:MSX-DOS2(または Nextor)のハードディスク・SDカードから ICITY.COM を実行します。' },
-  runCart:r => r === 'en8' ? '漢字ROM:不要' : T.ja.romName[r] + ':不要(フォントはカートリッジ内)',
+  runCart:(r, f) => r === 'ja' && !f ? T.ja.runRom(r) : r === 'en8' ? '漢字ROM:不要' : T.ja.romName[r] + ':不要(フォントはカートリッジ内)',
   runFdd:'韓国語漢字ROM:不要(フォントはディスク1に入る)。512KBマッパーの機械(FS-A1GT など)の場合。256KBの機械では必要。',
   runFile:r => T.ja.romName[r] + ':不要(フォントを ICITY\\FONT.BIN から読む)', runRom:r => r === 'en8' ? '漢字ROM:不要(英語版は漢字ROMを使いません)' : T.ja.romName[r] + ':必要(実行する機械の' + T.ja.romName[r] + 'から文字を読みます。ないと文字化け)',
   makeDsk:(r, f) => r === 'en8' ? '作成時:ゲームディスク8枚だけで作れます。' : f ? '作成時:入れたフォントファイルから FONT.BIN を作ります。' : '作成時:' + T.ja.fileName[r] + 'を入れると FONT.BIN を入れられます。',
+  makeCartJa:'作成時:漢字ROMファイルは任意です。入れるとフォントがカートリッジ内に入り、なければ実行する機械の漢字ROMを使います。',
   makeNeed:r => r === 'en8' ? '作成時:ゲームディスク8枚だけで作れます。' : '作成時:' + T.ja.fileName[r] + 'が必要です(フォントを取り出すだけ)。',
   fontHintNo:r => 'FONT.BIN を使うには' + T.ja.fileName[r] + 'を入れてください。このままでは実行する機械に' + T.ja.romName[r] + 'が必要です。',
   fontHintFile:r => '実行する機械に' + T.ja.romName[r] + 'がなくても動きます。', fontHintRom:r => '実行する機械に' + T.ja.romName[r] + 'が必要です(ないと文字化け)。',
@@ -282,10 +285,10 @@ ja: { tabs:['韓国語','英語','日本語'], title:'幻影都市 HDD・ROM作�
   noDos:'DOS のシステムファイルがありません。作れますが、イメージだけでは起動しません。', en6:'英語6枚版には対応していません。MSX Translations の8枚版を入れてください。',
   other:r => '入れたディスクは' + T.ja.relName[r] + 'です。', otherGo:l => T.ja.tabs[['ko','en','ja'].indexOf(l)] + 'タブで見る',
   relNote:{ en8:'英語版(翻訳:MSX Translations)です。ゲームディスク8枚だけで作れます(ユーザーディスクは任意、日本語版の「データディスク」も使えます)。漢字ROM・フォントファイルは不要で、フロッピー版はありません。',
-    ja:'日本語版です。フォントは日本語の漢字ROMです。カートリッジには実機から吸い出した漢字ROMファイル(262144バイト)が必要です。フロッピー版はありません(元のディスクのままで動きます)。' },
+    ja:'日本語版です。文字は機械に普通に入っている漢字ROMをそのまま使います。漢字ROMファイル(262144バイト)は任意で、入れると結果の中にフォントが入り、漢字ROMのない環境でも動きます。フロッピー版はありません(元のディスクのままで動きます)。' },
   slotHead:['NO','LV','場所'], slotEmpty:'未登録', slotD1:'ディスク1のセーブ(ゲームの一覧と同じ)', slotU:n => 'ユーザーディスクのセーブ:' + n,
   busy:'作成中...', err:'エラー:', doneFdd:'完了:変更したディスク1(D1.dsk)だけ、または8枚を ZIP でダウンロードできます。ディスク2〜8とユーザーディスクは元のままで使えます。韓国語漢字ROMは不要です。',
-  doneCart:r => '完了:カートリッジROM(Yamanooto、ASCII16-X、各4MB)をダウンロードできます。お持ちのカートリッジに合うものを選んでください。' + (r === 'en8' ? '' : '実行する機械に' + T.ja.romName[r] + 'は不要です。'),
+  doneCart:(r, f) => '完了:カートリッジROM(Yamanooto、ASCII16-X、各4MB)をダウンロードできます。お持ちのカートリッジに合うものを選んでください。' + (r === 'en8' ? '' : f ? '実行する機械に' + T.ja.romName[r] + 'は不要です。' : '文字は実行する機械の' + T.ja.romName[r] + 'で表示します。'),
   doneDsk:(r, f) => '完了:ハードディスクイメージ(.hd.dsk)と ZIP をダウンロードできます。' + (r === 'en8' ? '' : f ? '実行する機械に' + T.ja.romName[r] + 'は不要です(FONT.BIN)。' : 'この設定では' + T.ja.romName[r] + 'のある機械でのみ文字が表示されます。'),
   files:(n, u, t, mb) => 'ファイル ' + n + ' 個、使用クラスタ ' + u + '/' + t + '(空き ' + mb + 'MB)', zip:'このブラウザは zip の展開に対応していません。展開してから入れてください(最新の Chrome/Edge/Firefox/Safari は対応)。' }
 };
@@ -322,8 +325,8 @@ function setSeg(name, v){ document.querySelectorAll('.seg[data-opt="'+name+'"] b
 function invalidate(){ result = null; roms = null; fdd = null; ['dlDsk','dlZip','dlYAMA','dlA16X','dlD1','dlFddZip'].forEach(id => $(id).disabled = true); }
 function runHint(){
   const L = t(), r = rel(), fr = fontRel(), tg = opts.target, font = cls && cls.font;
-  const run = tg === 'cart' ? L.runCart(r === 'en8' ? r : fr) : tg === 'fdd' ? L.runFdd : r === 'en8' ? L.runRom('en8') : opts.font === 'file' ? L.runFile(fr) : L.runRom(fr);
-  const make = tg === 'dsk' ? L.makeDsk(r === 'en8' ? r : fr, font) : L.makeNeed(r === 'en8' ? r : fr);
+  const run = tg === 'cart' ? L.runCart(r === 'en8' ? r : fr, !!font) : tg === 'fdd' ? L.runFdd : r === 'en8' ? L.runRom('en8') : opts.font === 'file' ? L.runFile(fr) : L.runRom(fr);
+  const make = tg === 'dsk' ? L.makeDsk(r === 'en8' ? r : fr, font) : tg === 'cart' && r === 'ja' ? L.makeCartJa : L.makeNeed(r === 'en8' ? r : fr);
   $('runHint').textContent = run + ' · ' + make;
   $('fontFile').textContent = L.fontFile(fr); $('fontRom').textContent = L.fontRom(fr);
   $('fontHint').textContent = !font ? L.fontHintNo(fr) : opts.font === 'file' ? L.fontHintFile(fr) : L.fontHintRom(fr);
@@ -368,7 +371,7 @@ async function refresh(){
   const r = cls.disks[1] ? cls.release : null, en8 = rel() === 'en8', fr = fontRel();
   if (r) chip(L.rel, L.relName[r], r === 'en6' ? 'bad' : 'ok');
   if (rel() !== 'ko' && opts.target === 'fdd') setSeg('target', 'dsk');
-  const needFont = !en8 && opts.target !== 'dsk';
+  const needFont = !en8 && fr === 'ko' && opts.target !== 'dsk';      // the Korean release needs Kittya's font for the cartridge and the floppy
   if (!en8) chip(L.font, cls.font ? '✓ ' + cls.font.name : needFont ? L.req : L.opt, cls.font ? 'ok' : needFont ? 'bad' : 'opt');
   const hasA = !!cls.dos['MSXDOS2.SYS'], hasN = !!cls.dos['NEXTOR.SYS'], hasC = !!cls.dos['COMMAND2.COM'];
   if (opts.target === 'dsk') {
@@ -386,10 +389,10 @@ async function refresh(){
   applyTarget();
   const ok = [1,2,3,4,5,6,7,8].every(n => cls.disks[n]);
   const cart = opts.target === 'cart', fl = opts.target === 'fdd';
-  $('make').disabled = !ok || r === 'en6' || (!en8 && (cart || fl) && !cls.font);
+  $('make').disabled = !ok || r === 'en6' || (needFont && !cls.font);
   if (r === 'en6') show('bad', L.en6);
   else if (!ok) { if (items.length) show('bad', L.needDisks); }
-  else if (!en8 && (cart || fl) && !cls.font) show('bad', L.needFont(fr, opts.target));
+  else if (needFont && !cls.font) show('bad', L.needFont(fr, opts.target));
   else if (!cart && !fl && !hasA && !hasN) show('warn', L.noDos);
 }
 function slotList(){
@@ -430,7 +433,7 @@ async function make(){
     if (opts.target === 'cart') {
       roms = ICITY.buildCart({ assets: A, cls, keepSaves: opts.saves === 'keep', log: Lg });
       $('dlYAMA').disabled = false; $('dlA16X').disabled = false;
-      show('ok', L.doneCart(r === 'en8' ? r : fr));
+      show('ok', L.doneCart(r === 'en8' ? r : fr, !!cls.font));
       $('make').disabled = false; return;
     }
     const use = Object.assign({}, cls, { dos: {} });
