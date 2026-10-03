@@ -27,7 +27,7 @@
 | **G2**: 엔딩 인트로(디스크 1 파일 14, 커널 모드 2)의 한자 ROM 읽기 사본(ADFEh)을 DOS2·카트에서도 글꼴로 | `mkdos2/patches.py`, `cart/mkcart.py` |
 | 도구 버전 2026-10-01 표시(이전 DOS2·카트 결과물은 엔딩 인트로 글자가 깨짐 — 사용자가 공유 게시물에 안내함) | 웹 도구 아래, DOS2 README |
 
-## 2. 미커밋 (이 문서와 함께 커밋할 것)
+## 2. 마지막으로 넣은 것 (illuk_CART 56e978b, 웹 도구는 master d16cd5a / nextor_emu eee6336 / msxdos2 a452d21)
 - **카트 ROM에서 ARMI.COM·ARMI.DOC(디스크 1 섹터 588h–597h, 덤 RCP 플레이어) 제거**: 디스크의 빈 섹터 값(598h)으로 채움.
   `mkcart.py blank_armi`, `webapp/core.js` buildCart. 새 md5: A16X 45d25f081eb37618dd723a0381e393cc, YAMA b94f9191362eee7ef14ca21c2dded591.
   시험: 웹 결과 = mkcart(바이트 일치), 옛 ROM 세이브를 새 ROM이 읽음(두 매퍼 16/16), 파일 14 경로 386/386, 섹터 읽기 125회 중 불일치 2는 G1·P 패치 자리(정상).
@@ -47,6 +47,8 @@
 3. 확인 못 한 것: 엔딩 전체를 실제 진행으로(지금은 모드 2 강제 진입만), 플로피판 디스크 3–6·8 구간, 실기(플로피판·G2판),
    blueMSX(`/ide1primary` 등 명령행은 문서로만 확인), 일본어 원본 디스크 지원(패치 주소 비교 필요, 이미지 없음).
 4. 플로피판 글자 여유(한글 2,350자 중 1,109자 사용): 지금 디스크 1 남은 2섹터 ≈ 80자, ARMI 회수 시 디스크는 풀리지만 MIDI 모드 RAM이 한계(≈300자), FM만이면 전부 가능.
+
+5. **영문 8장판(MSX Translations) DOS2·카트**: 브랜치 `illuk_EN`(worktree `/home/sysop/data/Illucity_HD-en`, 세션 illucity-hd-en8)에서 진행. 계획·인수인계는 그 브랜치의 `hdtool/PLAN_EN8.md`, `HANDOFF_EN8.md`.
 
 ## 4. 이번 세션에서 확인한 사실 (요약)
 - **커널 모드 표 E908h**: 0=파일 4, 1=파일 5(타이틀·오프닝), 2=**파일 14(엔딩 인트로, 8000h)**, 3=파일 4. `(0081)=모드, (0082)=0, SP=FAF8h, PC=E000h`로
