@@ -8,6 +8,9 @@
  */
 (function (root) {
   'use strict';
+  const USER_MAX = 12;      // user disks: one per page of the 96-slot user-disk save list (8 slots each)
+  /* the slot sectors 0578h-0587h (8 slots of 1KB) of user disk k (0-based) go to page k: slots 8k..8k+7 */
+  const userSlots = (cls, keep) => keep === false || !cls.users ? [] : cls.users.slice(0, USER_MAX).map(u => u.data.subarray(SAVE_START * SEC, (SAVE_START + SAVE_LEN) * SEC));
   const SEC = 512, DISK_BYTES = 737280, DISK_SECTORS = 1440, SYS_LEN = 14, SAVE_START = 0x578, SAVE_LEN = 0x10, SAVE_FILE = 96 * 1024;
 
   /* English 8-disc release (MSX Translations): disk 1's boot sector reads sectors 0Bh-12h (8 sectors) to 0100h; the file table is the loader's
@@ -78,7 +81,7 @@
   /* ---------------------------------------------------------------- classify the dropped files */
   /* items: [{name, data}] (zips are opened).  Returns {disks:{1..8:{name,data}}, user, font, dos:{NAME:data}, notes:[]} */
   async function classify(items, inflate) {
-    const res = { disks: {}, user: null, font: null, dos: {}, notes: [] };
+    const res = { disks: {}, user: null, users: [], font: null, dos: {}, notes: [] };
     const flat = [];
     for (const it of items) {
       if (/\.zip$/i.test(it.name)) {
@@ -98,11 +101,15 @@
         const lab = asciiAt(f.data, 3, 7);
         const m = /^IPROJ0([1-8])$/.exec(lab);
         if (m) { if (res.disks[m[1]]) res.notes.push('disk ' + m[1] + ' twice: ' + f.name + ' ignored'); else res.disks[m[1]] = f; }
-        else if (!res.user) res.user = f; else res.notes.push('another user disk candidate ignored: ' + f.name);
+        else res.users.push(f);
       } else if (f.data.length === 262144) res.font = f;
       else if (/^(MSXDOS2\.SYS|COMMAND2\.COM|NEXTOR\.SYS)$/.test(up)) res.dos[up] = f.data;
       else res.notes.push('ignored: ' + f.name + ' (' + f.data.length + ' bytes)');
     }
+    // user disks: up to 12, in file-name order; user disk k fills page k of the 96-slot user-disk list (its 8 slots = slots 8k-7..8k)
+    res.users.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    for (const f of res.users.splice(USER_MAX)) res.notes.push('more than ' + USER_MAX + ' user disks: ' + f.name + ' ignored');
+    res.user = res.users[0] || null;
     const d1 = res.disks[1];
     res.release = d1 && isEn8(d1.data) ? 'en8' : d1 && isEn6(d1.data) ? 'en6' : d1 && isJa(d1.data) ? 'ja' : 'ko';
     if (res.release === 'en6') res.notes.push('disk 1 (' + d1.name + ') is from the 6-disk English translation, which this tool does not support');
@@ -193,7 +200,7 @@
     for (let n = 1; n <= 8; n++) { const d = cls.disks[n]; if (!d) throw new Error('game disk ' + n + ' (IPROJ0' + n + ') is missing'); disks[n] = d.data.slice(); }
     // user disk: given, or blank with disk 1's boot sector (as build_icity_hd.py does)
     let user;
-    if (cls.user && opts.keepSaves !== false) { user = cls.user.data.slice(); log('user disk: ' + cls.user.name); }
+    if (cls.user && opts.keepSaves !== false) { user = cls.user.data.slice(); log('user disk' + (cls.users.length > 1 ? 's (one per page): ' + cls.users.map(u => u.name).join(', ') : ': ' + cls.user.name)); }
     else { user = new Uint8Array(DISK_BYTES); user.set(disks[1].subarray(0, SEC), 0); user.set(new TextEncoder().encode('USERDISK'), 3); log('user disk: blank'); }
     disks.U = user;
     // patches (disk 1)
@@ -217,7 +224,9 @@
       for (let i = 0; i < starts.length; i++) {
         const a = starts[i], b = st[i + 1], nm = dn + '_' + hex4(a) + '.DAT', data = disks[tag].subarray(a * SEC, b * SEC);
         if (a === SAVE_START && (tag === '1' || tag === 'U')) {   // 96 slots of 1KB (paged slot list, patches P1-P6)
-          const sv = new Uint8Array(SAVE_FILE); sv.set(data, 0); (chunks.SAVE = chunks.SAVE || []).push({ name: nm, data: sv }); }
+          const sv = new Uint8Array(SAVE_FILE); sv.set(data, 0);
+          if (tag === 'U') userSlots(cls, opts.keepSaves).forEach((d, k) => { if (k) sv.set(d, k * SAVE_LEN * SEC); });
+          (chunks.SAVE = chunks.SAVE || []).push({ name: nm, data: sv }); }
         else dir.push({ name: nm, data });
         count++;
       }
@@ -350,7 +359,7 @@
     if (!en8 && !fontOn && cls.release !== 'ja') throw new Error('the cartridge needs the font (KANJI.rom, 262144 bytes)');
     if (fontOn && cls.font.data.length !== C.fontSize) throw new Error('font: expected ' + C.fontSize + ' bytes');
     let user;
-    if (cls.user && opts.keepSaves !== false) { user = cls.user.data; log('user disk: ' + cls.user.name); }
+    if (cls.user && opts.keepSaves !== false) { user = cls.user.data; log('user disk' + (cls.users.length > 1 ? 's (one per page): ' + cls.users.map(u => u.name).join(', ') : ': ' + cls.user.name)); }
     else { user = new Uint8Array(DISK_BYTES); user.set(disks[0].subarray(0, SEC), 0); user.set(new TextEncoder().encode('USERDISK'), 3); log('user disk: blank'); }
     // the boot code's own start: FRAY.DOS (Korean) or, in the English release, the boot sector's 8 sectors 0Bh-12h at 0100h
     const fray = en8 ? disks[0].slice(11 * SEC, 19 * SEC) : fat12File(disks[0], 'FRAY    DOS');
@@ -411,9 +420,12 @@
       if (fontOn) rom.set(cls.font.data, C.font);
       // save slots: group g in flash sector g (header 'IC', g, generation 1), sector nsave-1 spare
       for (let g = 0; g < 2 * C.slots / C.group; g++) rom.set([0x49, 0x43, g, 1, 0], C.save + g * 0x10000 + 0xC000);
-      [disks[0], user].forEach((d, area) => { for (let n = 0; n < 8; n++) {
-        const slot = area * C.slots + n, g = Math.floor(slot / C.group), p = slot % C.group, src = (C.saveFirst + 2 * n) * SEC;
-        rom.set(d.subarray(src, src + 2 * SEC), C.save + g * 0x10000 + (p >> 3) * 0x4000 + (p & 7) * 0x400); } });
+      // disk 1's 8 slots, then the user disks: user disk k's 8 slots on page k (slots 8k..8k+7) of the user-disk list
+      const pages = [[disks[0].subarray(C.saveFirst * SEC, (C.saveFirst + 16) * SEC)], userSlots(cls, opts.keepSaves)];
+      if (!pages[1].length) pages[1] = [user.subarray(C.saveFirst * SEC, (C.saveFirst + 16) * SEC)];
+      pages.forEach((list, area) => list.forEach((d, k) => { for (let n = 0; n < 8; n++) {
+        const slot = area * C.slots + 8 * k + n, g = Math.floor(slot / C.group), p = slot % C.group;
+        rom.set(d.subarray(2 * n * SEC, 2 * (n + 1) * SEC), C.save + g * 0x10000 + (p >> 3) * 0x4000 + (p & 7) * 0x400); } }));
       out.push({ tag: m.tag, name: m.name, rom });
       // opts.pad8: the ASCII16-X file also as 8MB (FFh after the 4MB): the MiSTer core takes a file as flash only when it is larger
       // than 4MB if its OSD mapper is set to ASCII16X by hand (mapper auto reads the signature); the cartridge never looks at the size
