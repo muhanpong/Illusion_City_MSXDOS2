@@ -21,7 +21,7 @@ This repository holds the tools (and build output) that repackage the MSX2+/turb
 - **일본어 원본판**: 번역 없이 원본 그대로, 기계 내장 한자 ROM을 씁니다(한자 ROM 파일을 넣으면 결과물 안에 글꼴을 넣을 수도 있음).
 
 ### 만드는 법
-`hdtool/webapp/icity_dsk_maker.html`을 브라우저로 열어 디스크 이미지를 넣으면 됩니다. 모든 처리는 브라우저 안에서만 이뤄지고 파일은 어디로도 전송되지 않습니다. 명령줄 도구(Python)는 `illuk_CART` 브랜치의 `hdtool/mkdos2/`, `hdtool/cart/`, `hdtool/fdd/`에 있습니다(영문판용은 `illuk_EN`).
+`hdtool/webapp/icity_dsk_maker.html`을 브라우저로 열어 디스크 이미지를 넣으면 됩니다. 모든 처리는 브라우저 안에서만 이뤄지고 파일은 어디로도 전송되지 않습니다. 명령줄 도구(Python)는 `illuk_CART` 브랜치의 `hdtool/mkdos2/`, `hdtool/cart/`, `hdtool/fdd/`에 있습니다(세 판 모두).
 
 ### 브랜치
 | 브랜치 | 내용 |
@@ -29,10 +29,9 @@ This repository holds the tools (and build output) that repackage the MSX2+/turb
 | `master` | Nextor 디스크 에뮬레이션판(가장 이른 변환 방식), 웹 도구 |
 | `nextor_emu` | 위와 같은 계열, 웹 도구 |
 | `msxdos2` | MSX-DOS2 런처판(`hdtool/mkdos2`) |
-| `illuk_CART` | 카트리지판(`hdtool/cart`)과 플로피판(`hdtool/fdd`), 웹 도구 |
-| `illuk_EN` | 영문 8장판(MSX Translations)의 DOS2·카트리지 명령줄 도구 |
+| `illuk_CART` | **명령줄 도구의 기준 브랜치**: DOS2(`hdtool/mkdos2`)·카트리지(`hdtool/cart`)·플로피(`hdtool/fdd`), 한·영·일 세 판, 웹 도구 |
 
-웹 도구(`hdtool/webapp/icity_dsk_maker.html`)는 다섯 브랜치 모두 같은 최신판입니다.
+웹 도구(`hdtool/webapp/icity_dsk_maker.html`)는 네 브랜치 모두 같은 최신판입니다.
 
 ### 실기 확인
 Panasonic FS-A1GT(turbo R) + MMC/SD V4 / MegaFlashROM SCC+ SD, MiSTer MSX1 코어에서 확인하며 만들고 있습니다.
@@ -52,7 +51,7 @@ Panasonic FS-A1GT(turbo R) + MMC/SD V4 / MegaFlashROM SCC+ SD, MiSTer MSX1 코�
 - **Japanese original**: unmodified text, reads the machine's own Kanji ROM (a Kanji ROM file can optionally put the font inside the output).
 
 ### Building
-Open `hdtool/webapp/icity_dsk_maker.html` in a browser and feed it your disk images — everything runs in the browser, nothing is uploaded anywhere. Command-line (Python) tools live in `hdtool/mkdos2/`, `hdtool/cart/`, `hdtool/fdd/` on branch `illuk_CART` (English release: `illuk_EN`).
+Open `hdtool/webapp/icity_dsk_maker.html` in a browser and feed it your disk images — everything runs in the browser, nothing is uploaded anywhere. Command-line (Python) tools live in `hdtool/mkdos2/`, `hdtool/cart/`, `hdtool/fdd/` on branch `illuk_CART` (all three releases).
 
 ### Branches
 | Branch | Contents |
@@ -60,10 +59,9 @@ Open `hdtool/webapp/icity_dsk_maker.html` in a browser and feed it your disk ima
 | `master` | Nextor disk-emulation build (the earliest approach), web tool |
 | `nextor_emu` | Same family, web tool |
 | `msxdos2` | MSX-DOS2 launcher release (`hdtool/mkdos2`) |
-| `illuk_CART` | Cartridge release (`hdtool/cart`), floppy release (`hdtool/fdd`), web tool |
-| `illuk_EN` | English 8-disc (MSX Translations) DOS2 and cartridge command-line tools |
+| `illuk_CART` | **Reference branch for the command-line tools**: DOS2 (`hdtool/mkdos2`), cartridge (`hdtool/cart`), floppy (`hdtool/fdd`), all three releases, web tool |
 
-The web tool (`hdtool/webapp/icity_dsk_maker.html`) is the same, latest version on all five branches.
+The web tool (`hdtool/webapp/icity_dsk_maker.html`) is the same, latest version on all four branches.
 
 ### Tested on
 Developed and checked against a Panasonic FS-A1GT (turbo R) with MMC/SD V4 or MegaFlashROM SCC+ SD, and the MiSTer MSX1 core.
@@ -83,7 +81,7 @@ Developed and checked against a Panasonic FS-A1GT (turbo R) with MMC/SD V4 or Me
 - **日本語オリジナル版**: テキストは無修正で、機種本体の漢字ROMを読みます（漢字ROMファイルを入れると成果物にフォントを内蔵することもできます）。
 
 ### 作り方
-`hdtool/webapp/icity_dsk_maker.html` をブラウザで開き、お手持ちのディスクイメージを読み込ませてください。処理はすべてブラウザ内で完結し、どこにも送信されません。コマンドライン版（Python）は `illuk_CART` ブランチの `hdtool/mkdos2/`、`hdtool/cart/`、`hdtool/fdd/` にあります（英語版用は `illuk_EN`）。
+`hdtool/webapp/icity_dsk_maker.html` をブラウザで開き、お手持ちのディスクイメージを読み込ませてください。処理はすべてブラウザ内で完結し、どこにも送信されません。コマンドライン版（Python）は `illuk_CART` ブランチの `hdtool/mkdos2/`、`hdtool/cart/`、`hdtool/fdd/` にあります（3版とも）。
 
 ### ブランチ
 | ブランチ | 内容 |
@@ -91,10 +89,9 @@ Developed and checked against a Panasonic FS-A1GT (turbo R) with MMC/SD V4 or Me
 | `master` | Nextor ディスクエミュレーション版（最初期の方式）、Web ツール |
 | `nextor_emu` | 同系統、Web ツール |
 | `msxdos2` | MSX-DOS2 ランチャー版（`hdtool/mkdos2`） |
-| `illuk_CART` | カートリッジ版（`hdtool/cart`）とフロッピー版（`hdtool/fdd`）、Web ツール |
-| `illuk_EN` | 英語8枚組（MSX Translations）版の DOS2・カートリッジ用コマンドラインツール |
+| `illuk_CART` | **コマンドラインツールの基準ブランチ**：DOS2（`hdtool/mkdos2`）・カートリッジ（`hdtool/cart`）・フロッピー（`hdtool/fdd`）、韓・英・日の3版、Web ツール |
 
-Web ツール（`hdtool/webapp/icity_dsk_maker.html`）は5つのブランチすべてで同じ最新版です。
+Web ツール（`hdtool/webapp/icity_dsk_maker.html`）は4つのブランチすべてで同じ最新版です。
 
 ### 動作確認環境
 Panasonic FS-A1GT（turbo R）+ MMC/SD V4 または MegaFlashROM SCC+ SD、および MiSTer MSX1 コアで確認しながら開発しています。
