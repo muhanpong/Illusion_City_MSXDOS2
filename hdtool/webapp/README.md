@@ -48,3 +48,11 @@ only the save-list patch site differs; ending intro text through the machine's K
 differ) and the DOS2 image (Nextor, boots to the Japanese menus). The Japanese "Data Disk 1-4" are user disks with saves (27 slots, levels 1-36); they also load in
 the Korean and English releases.
 `make_en8_assets.py` needs the English mkdos2/cart sources of branch `illuk_EN`; the generated keys are already in `assets.json` here.
+
+## ASCII16-X file size (2026-10-04)
+In the cartridge mode a choice "ASCII16-X file size" offers 4MB (default) or 8MB. The MiSTer core takes the 4MB file as flash by its
+"ASCII16X" signature when the OSD mapper is on auto; with the OSD mapper set to ASCII16X by hand it takes a file as flash only when it is
+larger than 4MB (`memory_upload.sv`, `rom_big`), so the 8MB file is the same ROM padded with FFh. `buildCart({pad8: true})` adds the
+entry `A16X_8MB`; the page always builds it and the choice only picks the download (`*_A16X_8MB.rom`). Same as `mkcart.py --pad8`.
+Checked: page = mkcart.py byte for byte (Korean), first 4MB = the 4MB file and the rest FFh (Korean, English, Japanese), the 8MB file
+runs in openMSX (`-romtype ASCII16-X`, start point, 125 reads, only the patch sites differ).

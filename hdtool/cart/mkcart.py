@@ -3,7 +3,9 @@
 more. The ASCII16-X file carries the "ASCII16X" signature at 0010h (cart.asm), so openMSX and the MiSTer core (mapper
 auto) take it as ASCII16-X with flash at 4MB.
 
-usage: mkcart.py <disks> <userdisk.dsk> <font> [outdir]
+usage: mkcart.py [--pad8] <disks> <userdisk.dsk> <font> [outdir]
+  --pad8: also write ICITY_A16X_8MB.rom, the ASCII16-X file padded with FFh to 8MB (MiSTer: the core takes a file as
+          flash only when it is larger than 4MB if the OSD mapper is set to ASCII16X by hand; mapper auto reads the signature)
   <disks>: one 5898240-byte image of disks 1-8 back to back,
            or a folder with the eight 720KB disk images (sorted by name = disk 1..8)
   <font>:  262144 bytes in the Kanji ROM layout (glyph index * 32), e.g. KANJI.rom.
@@ -256,6 +258,9 @@ def assemble(mapper, fray, tmp):
 
 
 def main():
+    pad8 = '--pad8' in sys.argv
+    if pad8:
+        sys.argv.remove('--pad8')
     if len(sys.argv) < 4:
         sys.exit(__doc__)
     disks = read_disks(sys.argv[1])
@@ -293,6 +298,9 @@ def main():
             out = os.path.join(outdir, f'ICITY_{tag}.rom')
             with open(out, 'wb') as f:
                 f.write(rom)
+            if pad8 and tag == 'A16X':                  # same content, FFh up to 8MB: the cartridge code never looks at the size
+                with open(os.path.join(outdir, 'ICITY_A16X_8MB.rom'), 'wb') as f:
+                    f.write(rom + b'\xff' * ((8 << 20) - len(rom)))
             shutil.copy(os.path.join(tmp, f'cart_{tag}.lst'), outdir)
             print(f'{out}: FRAY.DOS {len(fray)} bytes, {len(data) // 512} sectors ({nuniq} distinct) packed '
                   f'{DATA:06X}-{DATA + len(blob):06X}')
