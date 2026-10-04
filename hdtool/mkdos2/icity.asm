@@ -491,6 +491,8 @@ dos2_service:
         ld      (x_fn),a
         cp      50h                     ; 50h = glyph request (own font instead of the Kanji ROM)
         jp      z,glyph_srv
+        cp      52h                     ; 52h = clear the slot list rows (before a page is redrawn)
+        jp      z,clr_srv
     IFDEF EN8
         cp      51h                     ; 51h = slot list keys (page left/right), see ui_srv
         jp      z,ui_srv
@@ -701,6 +703,94 @@ xfer:
         add     hl,de
         ld      (x_sec),hl
         jp      .piece
+
+; ---------------------------------------------------------------- slot list: clear the 8 rows before another page is drawn
+; The game draws each row into a buffer (0,240) and copies only the text's width to (20, 52+12k) on page 0 and page 1
+; (HMMM, file7 04ABh); a shorter name left the end of the previous page's longer one.  Fill x 20-253, y 52-147 on both
+; pages with the window's own background (the byte at x 252, y 52, right of every row) before the game redraws.
+; Korean/Japanese build: function 52h (clrgo in game page 0) - clear, then make the hook return into 5944h (the redraw) by
+; putting its address under the AF the stub saved (game stack, in game page 3 = WIN): [AF][5944h][the caller's return].
+; (The English build clears from ui_srv when the page changes.)
+clr_srv:
+    IFNDEF EN8
+        call    lclr
+        ld      hl,(WIN+(GSP-0C000h))   ; game SP at the hook: the saved AF
+        ld      de,WIN-0C000h
+        add     hl,de
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+        ld      (hl),59h                ; 5944h where AF was
+        dec     hl
+        ld      (hl),44h
+        dec     hl
+        ld      (hl),d                  ; AF two bytes lower
+        dec     hl
+        ld      (hl),e
+        ld      hl,(WIN+(GSP-0C000h))
+        dec     hl
+        dec     hl
+        ld      (WIN+(GSP-0C000h)),hl
+        xor     a
+        ld      (RES),a
+        ld      a,1
+        call    put_p2
+        jp      leave
+    ELSE
+        jp      leave_en_nop
+    ENDIF
+lclr:   di
+        xor     a                       ; R14 = 0, read address 1A7Eh = (252, 52)
+        out     (99h),a
+        ld      a,8Eh
+        out     (99h),a
+        ld      a,7Eh
+        out     (99h),a
+        ld      a,1Ah
+        out     (99h),a
+        ex      (sp),hl
+        ex      (sp),hl
+        in      a,(98h)
+        ld      e,a
+        ld      hl,lclr_t
+        call    .one
+.one:   call    .wt
+        ld      a,36                    ; R17 = 36, auto-increment: DX, DY, NX, NY, CLR, ARG, CMD
+        out     (99h),a
+        ld      a,80h+17
+        out     (99h),a
+        ld      bc,8*256+9Bh
+        otir
+        ld      a,e
+        out     (9Bh),a
+        xor     a
+        out     (9Bh),a
+        ld      a,0C0h                  ; HMMV
+        out     (9Bh),a
+        call    .wt                     ; done before returning: the game's next glyph (HMMC) does not wait and would cut it short
+        ei
+        ret
+.wt:    ld      a,2                     ; wait for the VDP command unit (S#2 CE), then S#0 back
+        out     (99h),a
+        ld      a,8Fh
+        out     (99h),a
+        in      a,(99h)
+        rrca
+        ld      a,0
+        out     (99h),a
+        ld      a,8Fh
+        out     (99h),a
+        jr      c,.wt
+        ret
+    IFDEF EN8
+leave_en_nop:
+        ld      a,1
+        call    put_p2
+        di
+        jp      LEAVE_AT
+    ENDIF
+lclr_t: dw      20, 52, 234, 96         ; page 0
+        dw      20, 52+256, 234, 96     ; page 1
 
 ; ---------------------------------------------------------------- glyph service (own font)
 ; request: HL = (H = hi, bit6 = level; L = lo) exactly what the game wrote to the Kanji ROM ports.
@@ -1147,11 +1237,12 @@ ui_srv:
         or      a
         jr      z,.done
         dec     (hl)
-        jr      .done
+        jr      .chg
 .right: ld      a,(hl)
         cp      SLOTS/8-1
         jr      nc,.done
         inc     (hl)
+.chg:   call    lclr                    ; cbk redraws the page: clear the rows first
 .done:  ld      a,1
         call    put_p2
         di
@@ -1592,7 +1683,7 @@ cbk:    ld      a,(5EC3h)               ; P1 590Ah LD HL,cbk: called by the menu
         cp      SLOTS/8-1
         ret     nc
         inc     (hl)
-.set:   jp      5944h                   ; rebuild the 8 rows
+.set:   jp      clrgo                   ; clear the rows (DOS2 side), which then returns into 5944h: rebuild the 8 rows
 secof:  ld      hl,SAVE_SEC             ; P5/P6 5A66h/5A8Fh: sector of slot E (D = 0)
         ld      a,e
         sub     8
@@ -1626,6 +1717,8 @@ pg8:    ld      a,(page)                ; A = page*8 + B
         add     a,a
         add     a,b
         ret
+clrgo:  ld      c,52h                   ; cbk / newlist: clear the slot-list rows; clr_srv returns into 5944h
+        jp      0F37Dh
 ui2_end:
         ENT
         ASSERT ui2_end <= 0E960h        ; TBL

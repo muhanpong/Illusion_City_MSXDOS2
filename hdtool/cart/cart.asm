@@ -337,6 +337,55 @@ scan:   ld      hl,gsec
         jr      .f
 ; wslot: A = slot (0-191). Copies the slot's group (24 slots) from its flash sector into the spare one with the
 ; new slot, then writes the header ('IC', group, generation + 1) last; the old sector becomes the spare. NZ = timeout.
+; vclr (from cbk through romix): before another page of the slot list is drawn, fill x 20-253, y 52-147 of pages 0 and 1
+; with the window's background (the byte at x 252, y 52). The game draws each row into a buffer and copies only the text's
+; width, so a shorter name left the end of the previous page's longer one. Waits for the fill: the game's next glyph
+; (HMMC) does not wait for the command unit and would cut it short.
+vclr:   di
+        xor     a                       ; R14 = 0, read address 1A7Eh = (252, 52)
+        out     (99h),a
+        ld      a,8Eh
+        out     (99h),a
+        ld      a,7Eh
+        out     (99h),a
+        ld      a,1Ah
+        out     (99h),a
+        ex      (sp),hl
+        ex      (sp),hl
+        in      a,(98h)
+        ld      e,a
+        ld      hl,.tab
+        call    .one
+.one:   call    .wt
+        ld      a,36                    ; R17 = 36, auto-increment: DX, DY, NX, NY, CLR, ARG, CMD
+        out     (99h),a
+        ld      a,80h+17
+        out     (99h),a
+        ld      bc,8*256+9Bh
+        otir
+        ld      a,e
+        out     (9Bh),a
+        xor     a
+        out     (9Bh),a
+        ld      a,0C0h                  ; HMMV
+        out     (9Bh),a
+        call    .wt
+        ei
+        ret
+.wt:    ld      a,2                     ; S#2 CE, then S#0 back
+        out     (99h),a
+        ld      a,8Fh
+        out     (99h),a
+        in      a,(99h)
+        rrca
+        ld      a,0
+        out     (99h),a
+        ld      a,8Fh
+        out     (99h),a
+        jr      c,.wt
+        ret
+.tab:   dw      20, 52, 234, 96         ; page 0
+        dw      20, 52+256, 234, 96     ; page 1
 wslot:  call    grp
         call    curof
         ld      (wsw),a
@@ -1271,6 +1320,19 @@ setbank: ld     hl,(sbank)
 a16reg: db      30h,60h,0B0h
         ENDIF
 
+; grp: A = slot -> tgrp = slot / 24, tpos = slot mod 24, thalf = B
+grp:    ld      c,0
+.l:     cp      24
+        jr      c,.d
+        sub     24
+        inc     c
+        jr      .l
+.d:     ld      (tpos),a
+        ld      a,c
+        ld      (tgrp),a
+        ld      a,b
+        ld      (thalf),a
+        ret
 cur:    db      1
 dta:    dw      0080h
 cartsl: db      0
@@ -1478,6 +1540,8 @@ cbk:    ld      a,(5EC3h)               ; medium: 1 Quick, 2 SRAM, 3 disk 1, 4 u
         ret     z
         dec     a
 .set:   ld      (page),a
+        ld      ix,vclr                 ; clear the rows (cartridge ROM), then rebuild them
+        call    romix
         call    5944h                   ; rebuild the 8 rows
         xor     a
         ld      (34D3h),a               ; no highlight drawn any more
@@ -1574,19 +1638,6 @@ savslot: ld     a,(cur)
         ret
 .no:    scf
         ret
-; grp: A = slot -> tgrp = slot / 24, tpos = slot mod 24, thalf = B
-grp:    ld      c,0
-.l:     cp      24
-        jr      c,.d
-        sub     24
-        inc     c
-        jr      .l
-.d:     ld      (tpos),a
-        ld      a,c
-        ld      (tgrp),a
-        ld      a,b
-        ld      (thalf),a
-        ret
 page:   db      0
 pkey:   db      0
         ENT
@@ -1613,7 +1664,8 @@ curof:  call    gsecp
         ret
 ; wsave: A = slot -> wslot, which runs from the cartridge ROM in page 1 (its first 16KB: the boot banks)
 ; while the flash window is page 2 and the data page 3. NZ = flash timeout.
-wsave:  ld      c,a
+wsave:  ld      ix,wslot
+romix:  ld      c,a                     ; romix: IX = a routine of the boot banks, A passed on in A
         in      a,(0A8h)
         push    af
         push    bc
@@ -1635,7 +1687,7 @@ wsave:  ld      c,a
         ENDIF
         pop     bc
         ld      a,c
-        call    wslot
+        call    jpix
         pop     bc
         ld      a,b
         out     (0A8h),a
