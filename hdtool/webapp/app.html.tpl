@@ -65,7 +65,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 <body>
 <main>
 <nav class="langs" role="tablist" aria-label="Language">
-  <button role="tab" data-lang="ko" aria-selected="true"></button><button role="tab" data-lang="en" aria-selected="false"></button><button role="tab" data-lang="ja" aria-selected="false"></button>
+  <button role="tab" data-lang="ko" aria-selected="true" title="한국어로 보기 — 한글판 디스크용"></button><button role="tab" data-lang="en" aria-selected="false" title="View in English — for the English (MSX Translations) disks"></button><button role="tab" data-lang="ja" aria-selected="false" title="日本語で表示 — 日本語版ディスク用"></button>
 </nav>
 
 <div data-lang="ko">
