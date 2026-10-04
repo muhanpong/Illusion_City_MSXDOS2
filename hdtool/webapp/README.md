@@ -72,3 +72,14 @@ disk. The page takes the extra 720KB disks that are not game disks as user disks
 first); `mkdos2.py --user DISK` / `mkcart.py --user DISK` (repeatable) add pages 2, 3, ... after the usual user disk.
 Checked: page = Python for 5 user disks (test_cli.sh), and in openMSX a cartridge with 5 user disks loads page 3 slot 4 (slot 20,
 sector 0616h) and enters disk 5 as that save says.
+
+## Slot-list page change: leftover text (2026-10-04)
+The game draws each slot-list row into a buffer at (0,240) and copies only the text's width to (20, 52+12k) on pages 0 and 1, so
+after a page change a shorter name left the end of the previous page's longer one (easy to see with Japanese place names). Before
+the redraw the launchers / cartridge now fill x 20-253, y 52-147 of both pages with the window's background (read at x 252, y 52)
+and wait for the fill to end (the game's next glyph, an HMMC, does not wait for the command unit and would cut it short).
+DOS2 Korean/Japanese: `cbk` jumps to `clrgo` (5 free bytes at E95Bh) = function 52h, `clr_srv` clears and returns into 5944h by
+putting it under the hook's saved AF on the game stack (no file-9 patch address moves). DOS2 English: `ui_srv` clears when the page
+changes. Cartridge: `cbk` calls `vclr` in the boot ROM through `romix` (the former `wsave` path; `grp` moved to the resident part).
+Checked in openMSX: Japanese DOS2 and cartridge, English DOS2 and cartridge, page right/right/left with no leftovers (VRAM dumps);
+Korean cartridge save test 16/16 on both mappers and 125 reads (only the patch sites differ). Korean outputs change (launcher, cartridge).
