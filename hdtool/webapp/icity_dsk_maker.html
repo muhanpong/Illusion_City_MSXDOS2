@@ -90,7 +90,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 <tr data-t="cart"><td>Cartridge ROM</td><td>insert a Yamanooto or ASCII16-X cartridge and switch on</td><td class="y">not needed</td><td>the 8 game disks</td></tr>
 <tr data-t="fdd"><td>Floppy</td><td class="x" colspan="3">not offered: the English game runs from its original disks as it is</td></tr>
 </table></div>
-<p class="sub">English translation: <b>MSX Translations</b>. This tool only repackages their work so it can be played from a hard disk, an SD card or a cartridge. The tool itself was first made for the Korean translation by Kittya (see the Korean tab).</p>
+<p class="sub">English translation: <b>MSX Translations</b> — patch and details on their page: <a href="https://msxtranslations.com/ic.php" target="_blank" rel="noopener">msxtranslations.com/ic.php</a> (apply the IPS patches to the eight Japanese disks; their own ROM version is built there as well). This tool only repackages their work so it can be played from a hard disk, an SD card or a cartridge. The tool itself was first made for the Korean translation by Kittya (see the Korean tab).</p>
 </div>
 
 <div data-lang="ja" hidden>
@@ -174,7 +174,7 @@ Tool version 2026-10-03 — adds the English 8-disk release (MSX Translations) a
 HDD: a 16MB FAT12 hard-disk image (raw sectors, no header). openMSX: add an IDE / Nextor extension and <code>hda ICITY.hd.dsk</code>. MiSTer: same content, just rename it to <code>.vhd</code>. ZIP: copy ICITY.COM and the ICITY folder to the root of the SD card. The English DOS2 version has 96 save slots per disk (left/right on the slot list, keyboard or joystick).
 ROM: 4MB of content, for a Yamanooto or ASCII16-X cartridge with 4MB or more of flash (one file per mapper; building takes some tens of seconds). The ASCII16-X file carries the "ASCII16X" signature at 0010h, so openMSX and the MiSTer core (mapper auto) pick the flash mapper. Insert the cartridge and switch on; disk 1 and user-disk saves are written to the cartridge's flash. openMSX: <code>-carta ICITY_YAMA.rom -romtype Yamanooto</code>.
 A user disk is optional; a Japanese "Data Disk" works as one (same save format).
-English translation: MSX Translations. No game data, DOS files or fonts are inside this page: it carries only the launchers (ICITY.COM), a boot sector and the cartridge boot code.
+English translation: MSX Translations (<a href="https://msxtranslations.com/ic.php" target="_blank" rel="noopener">translation page</a>). No game data, DOS files or fonts are inside this page: it carries only the launchers (ICITY.COM), a boot sector and the cartridge boot code.
 </footer>
 <footer data-lang="ja" hidden>
 ツールのバージョン 2026-10-03 — 英語版(MSX Translations 8枚)と日本語版に対応しました。<br>
