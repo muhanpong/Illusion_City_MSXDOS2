@@ -34,7 +34,7 @@ the Korean ones are untouched), then `build_app.py`.  Test: `node test_en8.js <E
 (every chunk/save file, the launcher and both ROMs must equal the Python tools; edge cases); `ui_test.js` takes a directory and `-` for the English release.
 
 ## Language tabs and the Japanese original (2026-10-03)
-The page has three tabs at the top — Korean, English, Japanese (labels in the language shown; the choice is remembered in localStorage).
+The page has three tabs at the top — Korean, English, Japanese (labels in the language shown, the hover tooltip of each tab in its own language; the choice is remembered in localStorage).
 A tab sets the page language and the release its intro talks about; the build itself always follows the release found on the disks
 (`classify` → `cls.release`: `ko`, `ja`, `en8`, or `en6` = the 6-disk English translation, refused). If the disks belong to another tab,
 a note offers to switch. Download names: `ICITY*` (Korean), `ICITY_EN*`, `ICITY_JA*`.
