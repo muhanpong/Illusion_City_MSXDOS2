@@ -65,7 +65,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 <body>
 <main>
 <nav class="langs" role="tablist" aria-label="Language">
-  <button role="tab" data-lang="ko" aria-selected="true" title="한국어로 보기 — 한글판 디스크용"></button><button role="tab" data-lang="en" aria-selected="false" title="View in English — for the English (MSX Translations) disks"></button><button role="tab" data-lang="ja" aria-selected="false" title="日本語で表示 — 日本語版ディスク用"></button>
+  <button role="tab" data-lang="ko" aria-selected="true" title="한국어로 보기 — 한글판 디스크용" lang="ko">한국어</button><button role="tab" data-lang="en" aria-selected="false" title="View in English — for the English (MSX Translations) disks" lang="en">English</button><button role="tab" data-lang="ja" aria-selected="false" title="日本語で表示 — 日本語版ディスク用" lang="ja">日本語</button>
 </nav>
 
 <div data-lang="ko">
@@ -311,7 +311,7 @@ const fontRel = () => rel() === 'ja' ? 'ja' : 'ko';
 function setLang(l, keep){
   lang = l; document.documentElement.lang = l;
   if (!keep) try { localStorage.setItem('icityLang', l); } catch (e) { }
-  document.querySelectorAll('.langs button').forEach((b, i) => { b.textContent = T[l].tabs[i]; b.setAttribute('aria-selected', b.dataset.lang === l ? 'true' : 'false'); });
+  document.querySelectorAll('.langs button').forEach(b => { b.setAttribute('aria-selected', b.dataset.lang === l ? 'true' : 'false'); });
   document.querySelectorAll('[data-lang]:not(.langs button)').forEach(e => { if (!e.closest('.langs')) e.hidden = e.dataset.lang !== l; });
   document.querySelectorAll('[data-i]').forEach(e => { const v = T[l][e.dataset.i]; if (typeof v === 'string') e.textContent = v; });
   document.title = T[l].title; $('drop').setAttribute('aria-label', T[l].s1);
