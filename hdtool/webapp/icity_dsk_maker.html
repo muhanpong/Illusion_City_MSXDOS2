@@ -65,7 +65,7 @@ footer{color:var(--mute);font-size:12.5px;margin-top:14px}
 <body>
 <main>
 <nav class="langs" role="tablist" aria-label="Language">
-  <button role="tab" data-lang="ko" aria-selected="true" title="한국어로 보기 — 한글판 디스크용" lang="ko">한국어</button><button role="tab" data-lang="en" aria-selected="false" title="View in English — for the English (MSX Translations) disks" lang="en">English</button><button role="tab" data-lang="ja" aria-selected="false" title="日本語で表示 — 日本語版ディスク用" lang="ja">日本語</button>
+  <button role="tab" data-lang="ko" aria-selected="true" lang="ko">한국어</button><button role="tab" data-lang="en" aria-selected="false" lang="en">English</button><button role="tab" data-lang="ja" aria-selected="false" lang="ja">日本語</button>
 </nav>
 
 <div data-lang="ko">
@@ -746,7 +746,7 @@ const REL_OF = { ko:'ko', en:'en8', ja:'ja' }, LANG_OF = { ko:'ko', en8:'en', ja
 
 /* ---------------------------------------------------------------- texts: static labels (data-i) and messages, per page language */
 const T = {
-ko: { tabs:['한국어','영어','일본어'], title:'환영도시 HDD·ROM·플로피 만들기', s1:'파일 올리기', s2:'옵션', s3:'만들기',
+ko: { tabs:['한국어','영어','일본어'], tips:['한국어로 보기 — 한글판 디스크용','영어로 보기 — 영어판(MSX Translations) 디스크용','일본어로 보기 — 일본어판 디스크용'], title:'환영도시 HDD·ROM·플로피 만들기', s1:'파일 올리기', s2:'옵션', s3:'만들기',
   dropMain:'여기로 파일을 끌어다 놓거나 눌러서 선택', dropSmall:'게임 디스크 8장(.dsk 또는 zip) · 유저 디스크(선택, 최대 12장: 파일 이름 순으로 세이브 목록 1~12페이지) · KANJI.rom(카트리지·플로피는 필수, HDD는 선택) · MSXDOS2.SYS + COMMAND2.COM 또는 NEXTOR.SYS (HDD만, zip 가능)',
   lTarget:'만들 것', tDsk:'DOS2 하드디스크 (HDD / SD)', tCart:'카트리지 ROM', tFdd:'플로피 (원본 디스크 8장)',
   lAuto:'시작할 때 자동 실행', autoOn:'AUTOEXEC.BAT 사용', autoOff:'사용 안 함', autoHint:'켜면 부팅하자마자 ICITY를 실행합니다. 런처 오류 메시지가 순식간에 지나갈 수 있어 처음에는 끄는 것을 권합니다.',
@@ -781,7 +781,7 @@ ko: { tabs:['한국어','영어','일본어'], title:'환영도시 HDD·ROM·플
   doneDsk:(r, f) => '완료: 하드디스크 이미지(.hd.dsk)와 ZIP을 내려받을 수 있습니다.' + (r === 'en8' ? '' : f ? ' 실행할 기계에 ' + T.ko.romName[r] + '이 필요 없습니다(FONT.BIN).' : ' 이 설정으로는 ' + T.ko.romName[r] + '이 있는 기계에서만 글자가 나옵니다.'),
   files:(n, u, t, mb) => '파일 ' + n + '개, 사용 클러스터 ' + u + '/' + t + ' (여유 ' + mb + 'MB)', zip:'이 브라우저는 zip 해제를 지원하지 않습니다. 압축을 풀어서 올려 주세요. (Chrome/Edge/Firefox/Safari 최신 버전)' },
 
-en: { tabs:['Korean','English','Japanese'], title:'Illusion City HDD / ROM builder', s1:'Add files', s2:'Options', s3:'Build',
+en: { tabs:['Korean','English','Japanese'], tips:['View in Korean — for the Korean disks','View in English — for the English (MSX Translations) disks','View in Japanese — for the Japanese disks'], title:'Illusion City HDD / ROM builder', s1:'Add files', s2:'Options', s3:'Build',
   dropMain:'Drop files here or click to choose', dropSmall:'the 8 game disks (.dsk or zip) · user disks (optional, up to 12: in file-name order, pages 1-12 of the save list) · MSXDOS2.SYS + COMMAND2.COM or NEXTOR.SYS (HDD only, zip OK). Korean / Japanese releases: a 256KB Kanji ROM file as well (see their tabs)',
   lTarget:'Output', tDsk:'DOS2 hard disk (HDD / SD)', tCart:'Cartridge ROM', tFdd:'Floppy (Korean release only)',
   lAuto:'Run at boot', autoOn:'use AUTOEXEC.BAT', autoOff:'off', autoHint:'Starts ICITY right after booting. Leave it off at first: launcher error messages may flash by too fast to read.',
@@ -816,7 +816,7 @@ en: { tabs:['Korean','English','Japanese'], title:'Illusion City HDD / ROM build
   doneDsk:(r, f) => 'Done: the hard-disk image (.hd.dsk) and the ZIP (SD card) can be downloaded.' + (r === 'en8' ? '' : f ? ' The machine needs no ' + T.en.romName[r] + ' (FONT.BIN).' : ' With this setting the text only shows on a machine with a ' + T.en.romName[r] + '.'),
   files:(n, u, t, mb) => n + ' files, clusters used ' + u + '/' + t + ' (' + mb + 'MB free)', zip:'This browser cannot unpack zip files. Please unzip them first (current Chrome/Edge/Firefox/Safari can).' },
 
-ja: { tabs:['韓国語','英語','日本語'], title:'幻影都市 HDD・ROM作成ツール', s1:'ファイルを入れる', s2:'オプション', s3:'作成',
+ja: { tabs:['韓国語','英語','日本語'], tips:['韓国語で表示 — 韓国語版ディスク用','英語で表示 — 英語版(MSX Translations)ディスク用','日本語で表示 — 日本語版ディスク用'], title:'幻影都市 HDD・ROM作成ツール', s1:'ファイルを入れる', s2:'オプション', s3:'作成',
   dropMain:'ここにファイルをドロップ、またはクリックして選択', dropSmall:'ゲームディスク8枚(.dsk または zip)・ユーザーディスク(任意、最大12枚:ファイル名順にセーブ一覧の1〜12ページ)・漢字ROMファイル(256KB、任意)・MSXDOS2.SYS + COMMAND2.COM または NEXTOR.SYS(HDDのみ、zip可)',
   lTarget:'作るもの', tDsk:'DOS2 ハードディスク (HDD / SD)', tCart:'カートリッジROM', tFdd:'フロッピー(韓国語版のみ)',
   lAuto:'起動時に自動実行', autoOn:'AUTOEXEC.BAT を使う', autoOff:'使わない', autoHint:'オンにすると起動直後に ICITY を実行します。ランチャーのエラーメッセージが一瞬で消えることがあるので、最初はオフをおすすめします。',
@@ -858,7 +858,7 @@ const fontRel = () => rel() === 'ja' ? 'ja' : 'ko';
 function setLang(l, keep){
   lang = l; document.documentElement.lang = l;
   if (!keep) try { localStorage.setItem('icityLang', l); } catch (e) { }
-  document.querySelectorAll('.langs button').forEach(b => { b.setAttribute('aria-selected', b.dataset.lang === l ? 'true' : 'false'); });
+  document.querySelectorAll('.langs button').forEach((b, i) => { b.title = T[l].tips[i]; b.setAttribute('aria-selected', b.dataset.lang === l ? 'true' : 'false'); });
   document.querySelectorAll('[data-lang]:not(.langs button)').forEach(e => { if (!e.closest('.langs')) e.hidden = e.dataset.lang !== l; });
   document.querySelectorAll('[data-i]').forEach(e => { const v = T[l][e.dataset.i]; if (typeof v === 'string') e.textContent = v; });
   document.title = T[l].title; $('drop').setAttribute('aria-label', T[l].s1);
